@@ -421,6 +421,67 @@ getWeekendStats(month = new Date()) {
         
         return 'has-entries';
     }
+    /**
+ * Enhanced getDateTitle method with weekend information  
+ * ADD this method to your CalendarView class OR update existing getDateTitle method
+ */
+getDateTitleWithWeekends(date, entries) {
+    const dateStr = date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    let title = dateStr;
+    
+    // ✅ NEW: Add weekend indicator
+    if (this.isWeekend(date)) {
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+        title += ` 🏖️ (Weekend - ${dayName})`;
+    }
+    
+    if (!entries || entries.length === 0) {
+        if (this.isWeekend(date)) {
+            title += '\nNo entries logged for this weekend day';
+        } else {
+            title += '\nNo entries';
+        }
+        return title;
+    }
+    
+    title += `\n📝 ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
+    
+    // Add entry type breakdown
+    const typeCounts = {};
+    entries.forEach(entry => {
+        typeCounts[entry.type] = (typeCounts[entry.type] || 0) + 1;
+    });
+    
+    const typeLabels = {
+        work: 'Work',
+        fullLeave: 'Full Leave',
+        halfLeave: 'Half Leave', 
+        holiday: 'Holiday'
+    };
+    
+    const breakdown = Object.entries(typeCounts)
+        .map(([type, count]) => `${count} ${typeLabels[type] || type}`)
+        .join(', ');
+        
+    title += `\n${breakdown}`;
+    
+    // ✅ NEW: Special note for weekend work
+    if (this.isWeekend(date)) {
+        const workEntries = entries.filter(e => e.type === 'work');
+        if (workEntries.length > 0) {
+            const workHours = workEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
+            title += `\n⚠️ Weekend work: ${workHours} hours`;
+        }
+    }
+    
+    return title;
+}
 
     /**
      * ✅ NEW: Get entry type information

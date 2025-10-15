@@ -1,4 +1,4 @@
-// main.js
+// main.js - UPDATED VERSION WITH DASHBOARD INTEGRATION
 // Main Application Entry Point - Object-Oriented Architecture
 
 // Import all classes
@@ -18,10 +18,6 @@ import AnalyticsService from './services/AnalyticsService.js';
 import ExportService from './services/ExportService.js'; 
 import DashboardController from './controllers/DashboardController.js';
 
-// Initialize in your app startup
-
-
-
 /**
  * Main Work Log Application Class
  * Orchestrates all components and manages application lifecycle
@@ -33,12 +29,17 @@ class WorkLogApp {
         this.user = null;
         this.dataService = null;
         
+        // Services
+        this.analyticsService = null;
+        this.exportService = null;
+        
         // Controllers and Views
         this.authController = null;
         this.entryController = null;
         this.projectController = null;
         this.calendarView = null;
         this.toastController = null;
+        this.dashboardController = null; // ✅ NEW: Added dashboard controller
         
         // Application state
         this.isInitialized = false;
@@ -129,6 +130,23 @@ class WorkLogApp {
         // Initialize Data Service
         this.dataService = new DataService(this.firebaseConfig, this.user);
         console.log('✅ Data service initialized');
+
+        // ✅ NEW: Initialize Analytics and Export Services
+        try {
+            this.analyticsService = new AnalyticsService(this.dataService);
+            console.log('✅ Analytics service initialized');
+        } catch (error) {
+            console.warn('⚠️ Analytics service failed to initialize:', error);
+            this.analyticsService = null;
+        }
+
+        try {
+            this.exportService = new ExportService(this.dataService);
+            console.log('✅ Export service initialized');
+        } catch (error) {
+            console.warn('⚠️ Export service failed to initialize:', error);
+            this.exportService = null;
+        }
     }
 
     /**
@@ -153,6 +171,34 @@ class WorkLogApp {
         
         this.entryController = new EntryController(this.dataService, this.calendarView);
         console.log('✅ Entry controller initialized');
+
+        // ✅ NEW: Initialize Dashboard Controller
+        this.initializeDashboardController();
+    }
+
+    /**
+     * ✅ NEW: Initialize dashboard controller
+     */
+    initializeDashboardController() {
+        console.log('📊 Initializing Dashboard Controller...');
+        
+        try {
+            // Initialize Dashboard Controller with available services
+            this.dashboardController = new DashboardController(
+                this.dataService,
+                this.analyticsService,  // May be null - controller handles this
+                this.exportService      // May be null - controller handles this
+            );
+            
+            console.log('✅ Dashboard controller initialized');
+            
+            // Make dashboard controller available globally
+            window.dashboardController = this.dashboardController;
+            
+        } catch (error) {
+            console.error('❌ Dashboard controller initialization failed:', error);
+            this.dashboardController = null;
+        }
     }
 
     /**
@@ -163,6 +209,7 @@ class WorkLogApp {
         window.entryController = this.entryController;
         window.projectController = this.projectController;
         window.authController = this.authController;
+        window.dashboardController = this.dashboardController; // ✅ NEW
         window.app = this;
         
         // Make models available globally for validation and utilities
@@ -186,6 +233,12 @@ class WorkLogApp {
                 await this.dataService.loadData();
                 this.calendarView.refresh();
                 this.entryController.updateProjectDropdown();
+                
+                // ✅ NEW: Refresh dashboard after authentication
+                if (this.dashboardController) {
+                    this.dashboardController.refreshDashboard();
+                }
+                
                 this.showToast('✅ Data synced from cloud');
                 
                 // Track user login
@@ -203,6 +256,11 @@ class WorkLogApp {
             this.calendarView.refresh();
             this.entryController.updateProjectDropdown();
             
+            // ✅ NEW: Refresh dashboard in guest mode
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
+            
             // Track guest usage
             this.trackEvent('guest_mode_activated');
         });
@@ -213,6 +271,11 @@ class WorkLogApp {
             this.calendarView.refresh();
             this.entryController.updateProjectDropdown();
             
+            // ✅ NEW: Refresh dashboard after logout
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
+            
             // Track logout
             this.trackEvent('user_logout');
         });
@@ -221,25 +284,68 @@ class WorkLogApp {
         document.addEventListener('projects:updated', (event) => {
             console.log('📋 Projects updated, refreshing dropdowns...');
             this.entryController.updateProjectDropdown();
+            
+            // ✅ NEW: Refresh dashboard when projects are updated
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
         });
 
         // Calendar events
         document.addEventListener('calendar:dateSelected', (event) => {
             console.log('📅 Date selected:', event.detail.dateKey);
             this.trackEvent('date_selected', { date: event.detail.dateKey });
+            
+            // ✅ NEW: Update dashboard export button states when date is selected
+            if (this.dashboardController) {
+                this.dashboardController.updateExportButtonStates();
+            }
         });
 
-        // Entry events
+        // ✅ NEW: Entry events - refresh dashboard
         document.addEventListener('entry:added', (event) => {
             this.trackEvent('entry_added', { type: event.detail.type });
+            
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
         });
 
         document.addEventListener('entry:updated', (event) => {
             this.trackEvent('entry_updated', { type: event.detail.type });
+            
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
         });
 
         document.addEventListener('entry:deleted', (event) => {
             this.trackEvent('entry_deleted', { type: event.detail.type });
+            
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
+        });
+
+        // ✅ NEW: Data events - refresh dashboard
+        document.addEventListener('data:updated', (event) => {
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
+        });
+
+        document.addEventListener('data:imported', (event) => {
+            console.log('📥 Data imported, refreshing all components...');
+            
+            // Refresh all components
+            this.calendarView.refresh();
+            this.entryController.updateProjectDropdown();
+            
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
+            
+            this.showToast('✅ Data imported and application refreshed');
         });
 
         // Export functionality
@@ -361,6 +467,12 @@ class WorkLogApp {
                 await this.dataService.loadData();
                 this.calendarView.refresh();
                 this.entryController.updateProjectDropdown();
+                
+                // ✅ NEW: Initialize dashboard with data
+                if (this.dashboardController) {
+                    this.dashboardController.refreshDashboard();
+                }
+                
                 console.log('📊 Initial data loaded from cloud');
             } catch (error) {
                 console.warn('Error loading initial data:', error);
@@ -370,6 +482,12 @@ class WorkLogApp {
             this.dataService.loadFromLocal();
             this.calendarView.refresh();
             this.entryController.updateProjectDropdown();
+            
+            // ✅ NEW: Initialize dashboard in guest mode
+            if (this.dashboardController) {
+                this.dashboardController.refreshDashboard();
+            }
+            
             console.log('💾 Initial data loaded from local storage');
         }
     }
@@ -406,6 +524,10 @@ class WorkLogApp {
                 try {
                     await this.dataService.saveData();
                     console.log('💾 Auto-saved data');
+                    
+                    // ✅ NEW: Trigger data updated event after auto-save
+                    document.dispatchEvent(new CustomEvent('data:updated'));
+                    
                 } catch (error) {
                     console.warn('Auto-save failed:', error);
                 }
@@ -632,6 +754,12 @@ class WorkLogApp {
             try {
                 await this.dataService.saveData();
                 this.showToast('☁️ Data synced successfully');
+                
+                // ✅ NEW: Refresh dashboard after successful sync
+                if (this.dashboardController) {
+                    this.dashboardController.refreshDashboard();
+                }
+                
             } catch (error) {
                 console.error('Sync failed after going online:', error);
                 this.showToast('⚠️ Sync failed - will retry automatically');
@@ -659,6 +787,13 @@ class WorkLogApp {
                 console.warn('Failed to refresh data on resume:', error);
             });
         }
+        
+        // ✅ NEW: Refresh dashboard on resume
+        if (this.dashboardController) {
+            setTimeout(() => {
+                this.dashboardController.refreshDashboard();
+            }, 1000);
+        }
     }
 
     /**
@@ -668,6 +803,10 @@ class WorkLogApp {
         try {
             const result = await this.dataService.saveData();
             this.showToast(result.message || '💾 Data saved');
+            
+            // ✅ NEW: Trigger data updated event after force save
+            document.dispatchEvent(new CustomEvent('data:updated'));
+            
         } catch (error) {
             console.error('Force save failed:', error);
             this.showToast('❌ Save failed');
@@ -797,6 +936,16 @@ class WorkLogApp {
         const isDebug = document.body.classList.toggle('debug-mode');
         console.log(`Debug mode: ${isDebug ? 'enabled' : 'disabled'}`);
         this.showToast(`🐛 Debug mode ${isDebug ? 'enabled' : 'disabled'}`);
+        
+        // ✅ NEW: Show dashboard debug info in debug mode
+        if (isDebug && this.dashboardController) {
+            console.log('📊 Dashboard Controller Status:', {
+                initialized: !!this.dashboardController,
+                analyticsService: !!this.analyticsService,
+                exportService: !!this.exportService,
+                elements: Object.keys(this.dashboardController.elements).length
+            });
+        }
     }
 
     /**
@@ -819,10 +968,17 @@ class WorkLogApp {
         • End: Go to last day of month
         • Page Up/Down: Navigate months
         
+        📊 Dashboard Features:
+        • Monthly Summary: Real-time statistics
+        • Historical Data: Past months overview
+        • Export Options: CSV/JSON downloads
+        • Weekend Detection: Green weekend days
+        
         📝 Quick Tips:
         • Data is auto-saved every 30 seconds
         • Use guest mode for temporary usage
         • Export your data regularly for backup
+        • Dashboard updates automatically when data changes
         `;
         
         alert(helpContent);
@@ -977,7 +1133,11 @@ class WorkLogApp {
             'auto_save',
             'keyboard_shortcuts',
             'theme_support',
-            'offline_mode'
+            'offline_mode',
+            'dashboard_analytics',    // ✅ NEW
+            'weekend_detection',      // ✅ NEW
+            'historical_data',        // ✅ NEW
+            'backup_restore'          // ✅ NEW
         ];
     }
 
@@ -1002,6 +1162,9 @@ class WorkLogApp {
             buildDate: this.buildDate,
             user: this.user?.getUserProfile(),
             dataService: this.dataService?.getSyncStatus(),
+            dashboardController: !!this.dashboardController, // ✅ NEW
+            analyticsService: !!this.analyticsService,        // ✅ NEW
+            exportService: !!this.exportService,              // ✅ NEW
             errorCount: this.errorCount,
             features: this.getEnabledFeatures()
         };
@@ -1029,6 +1192,14 @@ class WorkLogApp {
      */
     getCalendarView() {
         return this.calendarView;
+    }
+
+    /**
+     * ✅ NEW: Get dashboard controller instance
+     * @returns {DashboardController} - DashboardController instance
+     */
+    getDashboardController() {
+        return this.dashboardController;
     }
 
     /**
@@ -1060,11 +1231,13 @@ class WorkLogApp {
             if (this.entryController) this.entryController.destroy();
             if (this.projectController) this.projectController.destroy();
             if (this.toastController) this.toastController.destroy();
+            if (this.dashboardController) this.dashboardController.destroy(); // ✅ NEW
             
             // Clear global references
             delete window.entryController;
             delete window.projectController;
             delete window.authController;
+            delete window.dashboardController; // ✅ NEW
             delete window.app;
             
             this.trackEvent('app_shutdown');

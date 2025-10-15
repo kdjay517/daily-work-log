@@ -1,14 +1,13 @@
 // controllers/ToastController.js
-// Toast Notification Controller - Handles toast notifications
+// Toast Controller - Manages toast notifications and messages
 
 class ToastController {
     constructor() {
         this.elements = {};
         this.toastQueue = [];
         this.currentToast = null;
-        this.toastTimeout = null;
         this.defaultDuration = 3000;
-        this.maxToasts = 5;
+        this.isVisible = false;
         
         this.cacheElements();
         this.initialize();
@@ -22,8 +21,109 @@ class ToastController {
             toast: document.getElementById('toast'),
             toastMessage: document.getElementById('toastMessage'),
             toastIcon: document.getElementById('toastIcon'),
-            toastClose: document.getElementById('toastClose')
+            toastClose: document.getElementById('toastClose'),
+            toastContainer: document.getElementById('toastContainer')
         };
+
+        // Create toast elements if they don't exist
+        if (!this.elements.toast) {
+            this.createToastElements();
+        }
+    }
+
+    /**
+     * Create toast elements if they don't exist in DOM
+     */
+    createToastElements() {
+        // Create toast container if it doesn't exist
+        if (!this.elements.toastContainer) {
+            const container = document.createElement('div');
+            container.id = 'toastContainer';
+            container.className = 'toast-container';
+            container.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 1000;
+                pointer-events: none;
+            `;
+            document.body.appendChild(container);
+            this.elements.toastContainer = container;
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = 'toast hidden';
+        toast.style.cssText = `
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            box-shadow: var(--shadow-lg);
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            max-width: 400px;
+            pointer-events: auto;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        `;
+
+        // Create toast icon
+        const toastIcon = document.createElement('span');
+        toastIcon.id = 'toastIcon';
+        toastIcon.className = 'toast-icon';
+        toastIcon.style.cssText = `
+            font-size: 16px;
+            flex-shrink: 0;
+        `;
+
+        // Create toast message
+        const toastMessage = document.createElement('span');
+        toastMessage.id = 'toastMessage';
+        toastMessage.className = 'toast-message';
+        toastMessage.style.cssText = `
+            flex: 1;
+            font-size: var(--font-size-sm);
+            color: var(--color-text);
+        `;
+
+        // Create close button
+        const toastClose = document.createElement('button');
+        toastClose.id = 'toastClose';
+        toastClose.className = 'toast-close';
+        toastClose.innerHTML = '×';
+        toastClose.style.cssText = `
+            background: none;
+            border: none;
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2px;
+            flex-shrink: 0;
+        `;
+
+        // Assemble toast
+        toast.appendChild(toastIcon);
+        toast.appendChild(toastMessage);
+        toast.appendChild(toastClose);
+        
+        this.elements.toastContainer.appendChild(toast);
+        
+        // Update element references
+        this.elements.toast = toast;
+        this.elements.toastMessage = toastMessage;
+        this.elements.toastIcon = toastIcon;
+        this.elements.toastClose = toastClose;
     }
 
     /**
@@ -31,18 +131,13 @@ class ToastController {
      */
     initialize() {
         this.setupEventListeners();
-        this.createToastElements();
+        console.log('ToastController: Initialized successfully');
     }
 
     /**
-     * Set up event listeners
+     * Setup event listeners
      */
     setupEventListeners() {
-        // Listen for toast events from other components
-        document.addEventListener('app:toast', (event) => {
-            this.handleToastEvent(event.detail);
-        });
-
         // Close button click
         if (this.elements.toastClose) {
             this.elements.toastClose.addEventListener('click', () => {
@@ -50,403 +145,177 @@ class ToastController {
             });
         }
 
-        // Click toast to dismiss
+        // Toast click to dismiss
         if (this.elements.toast) {
             this.elements.toast.addEventListener('click', () => {
                 this.hide();
             });
         }
 
-        // Keyboard support
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isVisible()) {
+        // Listen for app toast events
+        document.addEventListener('app:toast', (event) => {
+            const { message, type = 'info', duration = this.defaultDuration } = event.detail;
+            this.show(message, type, duration);
+        });
+
+        // Listen for keyboard events (ESC to close)
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.isVisible) {
                 this.hide();
             }
         });
 
-        // Pause on hover
-        if (this.elements.toast) {
-            this.elements.toast.addEventListener('mouseenter', () => {
-                this.pauseTimeout();
-            });
-
-            this.elements.toast.addEventListener('mouseleave', () => {
-                this.resumeTimeout();
-            });
-        }
+        console.log('ToastController: Event listeners set up');
     }
 
     /**
-     * Create toast elements if they don't exist
-     */
-    createToastElements() {
-        if (this.elements.toast) return;
-
-        // Create toast container
-        const toastContainer = document.createElement('div');
-        toastContainer.id = 'toast';
-        toastContainer.className = 'toast hidden';
-        toastContainer.setAttribute('role', 'alert');
-        toastContainer.setAttribute('aria-live', 'polite');
-
-        // Create toast content
-        const toastContent = document.createElement('div');
-        toastContent.className = 'toast-content';
-
-        // Create icon
-        const toastIcon = document.createElement('span');
-        toastIcon.id = 'toastIcon';
-        toastIcon.className = 'toast-icon';
-        toastIcon.setAttribute('aria-hidden', 'true');
-
-        // Create message
-        const toastMessage = document.createElement('span');
-        toastMessage.id = 'toastMessage';
-        toastMessage.className = 'toast-message';
-
-        // Create close button
-        const toastClose = document.createElement('button');
-        toastClose.id = 'toastClose';
-        toastClose.className = 'toast-close';
-        toastClose.innerHTML = '×';
-        toastClose.setAttribute('aria-label', 'Close notification');
-        toastClose.type = 'button';
-
-        // Assemble toast
-        toastContent.appendChild(toastIcon);
-        toastContent.appendChild(toastMessage);
-        toastContent.appendChild(toastClose);
-        toastContainer.appendChild(toastContent);
-
-        // Add to body
-        document.body.appendChild(toastContainer);
-
-        // Update cached elements
-        this.cacheElements();
-
-        // Re-setup event listeners for new elements
-        this.setupEventListeners();
-    }
-
-    /**
-     * Handle toast event from other components
-     * @param {Object} detail - Event detail
-     */
-    handleToastEvent(detail) {
-        if (typeof detail === 'string') {
-            this.show(detail);
-        } else if (detail && detail.message) {
-            this.show(detail.message, detail.type, detail.duration);
-        }
-    }
-
-    /**
-     * Show toast notification
+     * Show toast message
      * @param {string} message - Message to display
      * @param {string} type - Toast type (success, error, warning, info)
-     * @param {number} duration - Duration in milliseconds
+     * @param {number} duration - Display duration in milliseconds
      */
     show(message, type = 'info', duration = this.defaultDuration) {
-        if (!message) return;
-
-        // Create toast data
-        const toastData = {
-            message,
-            type: this.normalizeType(type),
-            duration,
-            timestamp: Date.now(),
-            id: this.generateId()
-        };
-
-        // Add to queue if toast is currently showing
-        if (this.isVisible()) {
-            this.addToQueue(toastData);
+        // Queue the toast if one is already visible
+        if (this.isVisible) {
+            this.toastQueue.push({ message, type, duration });
             return;
         }
 
-        // Show toast immediately
-        this.displayToast(toastData);
+        this.currentToast = { message, type, duration };
+        this.displayToast();
     }
 
     /**
-     * Display toast notification
-     * @param {Object} toastData - Toast data object
+     * Display the current toast
      */
-    displayToast(toastData) {
-        if (!this.elements.toast || !this.elements.toastMessage) {
-            console.warn('Toast elements not found');
-            return;
+    displayToast() {
+        if (!this.currentToast || !this.elements.toast) return;
+
+        const { message, type, duration } = this.currentToast;
+
+        // Set message content
+        if (this.elements.toastMessage) {
+            this.elements.toastMessage.textContent = message;
         }
 
-        this.currentToast = toastData;
+        // Set icon and styling based on type
+        this.setToastTypeStyles(type);
 
-        // Set message
-        this.elements.toastMessage.textContent = toastData.message;
-
-        // Set icon based on type
-        this.setToastIcon(toastData.type);
-
-        // Set toast class for styling
-        this.setToastClass(toastData.type);
-
-        // Show toast with animation
+        // Show toast
         this.elements.toast.classList.remove('hidden');
         
         // Trigger animation
-        requestAnimationFrame(() => {
-            this.elements.toast.classList.add('show');
-        });
-
-        // Set up auto-hide timeout
-        this.setAutoHideTimeout(toastData.duration);
-
-        // Update accessibility
-        this.updateAccessibility(toastData);
-
-        // Dispatch shown event
-        this.dispatchToastEvent('shown', toastData);
-    }
-
-    /**
-     * Hide toast notification
-     */
-    hide() {
-        if (!this.elements.toast || !this.isVisible()) {
-            return;
-        }
-
-        // Clear timeout
-        this.clearTimeout();
-
-        // Hide with animation
-        this.elements.toast.classList.remove('show');
-
-        // Wait for animation to complete
         setTimeout(() => {
-            this.elements.toast.classList.add('hidden');
-            this.resetToastState();
-            
-            // Dispatch hidden event
-            this.dispatchToastEvent('hidden', this.currentToast);
-            
-            this.currentToast = null;
-            
-            // Show next toast in queue
-            this.showNextToast();
-        }, 300);
-    }
+            this.elements.toast.style.opacity = '1';
+            this.elements.toast.style.transform = 'translateX(0)';
+        }, 10);
 
-    /**
-     * Add toast to queue
-     * @param {Object} toastData - Toast data
-     */
-    addToQueue(toastData) {
-        // Limit queue size
-        if (this.toastQueue.length >= this.maxToasts) {
-            this.toastQueue.shift(); // Remove oldest
-        }
-        
-        this.toastQueue.push(toastData);
-    }
+        this.isVisible = true;
 
-    /**
-     * Show next toast from queue
-     */
-    showNextToast() {
-        if (this.toastQueue.length > 0) {
-            const nextToast = this.toastQueue.shift();
-            setTimeout(() => {
-                this.displayToast(nextToast);
-            }, 100);
-        }
-    }
-
-    /**
-     * Set toast icon based on type
-     * @param {string} type - Toast type
-     */
-    setToastIcon(type) {
-        if (!this.elements.toastIcon) return;
-
-        const icons = {
-            success: '✅',
-            error: '❌',
-            warning: '⚠️',
-            info: 'ℹ️'
-        };
-
-        this.elements.toastIcon.textContent = icons[type] || icons.info;
-    }
-
-    /**
-     * Set toast CSS class based on type
-     * @param {string} type - Toast type
-     */
-    setToastClass(type) {
-        if (!this.elements.toast) return;
-
-        // Remove all type classes
-        this.elements.toast.classList.remove('toast--success', 'toast--error', 'toast--warning', 'toast--info');
-        
-        // Add current type class
-        this.elements.toast.classList.add(`toast--${type}`);
-    }
-
-    /**
-     * Set auto-hide timeout
-     * @param {number} duration - Duration in milliseconds
-     */
-    setAutoHideTimeout(duration) {
-        this.clearTimeout();
-        
+        // Auto-hide after duration
         if (duration > 0) {
-            this.toastTimeout = setTimeout(() => {
+            setTimeout(() => {
                 this.hide();
             }, duration);
         }
     }
 
     /**
-     * Pause timeout (on hover)
+     * Set toast styling based on type
+     * @param {string} type - Toast type
      */
-    pauseTimeout() {
-        if (this.toastTimeout) {
-            clearTimeout(this.toastTimeout);
-            this.toastTimeout = null;
-        }
-    }
-
-    /**
-     * Resume timeout (on mouse leave)
-     */
-    resumeTimeout() {
-        if (this.currentToast && this.currentToast.duration > 0) {
-            const elapsed = Date.now() - this.currentToast.timestamp;
-            const remaining = Math.max(0, this.currentToast.duration - elapsed);
-            
-            if (remaining > 0) {
-                this.setAutoHideTimeout(remaining);
-            } else {
-                this.hide();
+    setToastTypeStyles(type) {
+        const typeConfig = {
+            success: {
+                icon: '✅',
+                borderColor: 'var(--color-success)',
+                backgroundColor: 'rgba(var(--color-success-rgb), 0.1)'
+            },
+            error: {
+                icon: '❌',
+                borderColor: 'var(--color-error)',
+                backgroundColor: 'rgba(var(--color-error-rgb), 0.1)'
+            },
+            warning: {
+                icon: '⚠️',
+                borderColor: 'var(--color-warning)',
+                backgroundColor: 'rgba(var(--color-warning-rgb), 0.1)'
+            },
+            info: {
+                icon: 'ℹ️',
+                borderColor: 'var(--color-info)',
+                backgroundColor: 'rgba(var(--color-info-rgb), 0.1)'
             }
-        }
-    }
-
-    /**
-     * Clear timeout
-     */
-    clearTimeout() {
-        if (this.toastTimeout) {
-            clearTimeout(this.toastTimeout);
-            this.toastTimeout = null;
-        }
-    }
-
-    /**
-     * Reset toast state
-     */
-    resetToastState() {
-        if (this.elements.toast) {
-            this.elements.toast.classList.remove('toast--success', 'toast--error', 'toast--warning', 'toast--info');
-        }
-        
-        if (this.elements.toastMessage) {
-            this.elements.toastMessage.textContent = '';
-        }
-        
-        if (this.elements.toastIcon) {
-            this.elements.toastIcon.textContent = '';
-        }
-    }
-
-    /**
-     * Update accessibility attributes
-     * @param {Object} toastData - Toast data
-     */
-    updateAccessibility(toastData) {
-        if (!this.elements.toast) return;
-
-        // Set appropriate role and aria attributes
-        const isError = toastData.type === 'error';
-        this.elements.toast.setAttribute('role', isError ? 'alert' : 'status');
-        this.elements.toast.setAttribute('aria-live', isError ? 'assertive' : 'polite');
-        this.elements.toast.setAttribute('aria-atomic', 'true');
-    }
-
-    /**
-     * Normalize toast type
-     * @param {string} type - Raw type
-     * @returns {string} - Normalized type
-     */
-    normalizeType(type) {
-        const validTypes = ['success', 'error', 'warning', 'info'];
-        const normalized = type?.toLowerCase();
-        
-        if (validTypes.includes(normalized)) {
-            return normalized;
-        }
-
-        // Map common variations
-        const typeMap = {
-            'ok': 'success',
-            'good': 'success',
-            'done': 'success',
-            'fail': 'error',
-            'bad': 'error',
-            'danger': 'error',
-            'warn': 'warning',
-            'caution': 'warning',
-            'information': 'info',
-            'note': 'info'
         };
 
-        return typeMap[normalized] || 'info';
+        const config = typeConfig[type] || typeConfig.info;
+
+        if (this.elements.toastIcon) {
+            this.elements.toastIcon.textContent = config.icon;
+        }
+
+        if (this.elements.toast) {
+            this.elements.toast.style.borderLeftColor = config.borderColor;
+            this.elements.toast.style.borderLeftWidth = '4px';
+            this.elements.toast.style.backgroundColor = config.backgroundColor;
+        }
     }
 
     /**
-     * Generate unique ID
-     * @returns {string} - Unique ID
+     * Hide current toast
      */
-    generateId() {
-        return `toast_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    hide() {
+        if (!this.isVisible || !this.elements.toast) return;
+
+        // Animate out
+        this.elements.toast.style.opacity = '0';
+        this.elements.toast.style.transform = 'translateX(100%)';
+
+        // Hide after animation
+        setTimeout(() => {
+            if (this.elements.toast) {
+                this.elements.toast.classList.add('hidden');
+            }
+            this.isVisible = false;
+            this.currentToast = null;
+
+            // Process queue
+            this.processQueue();
+        }, 300);
     }
 
     /**
-     * Check if toast is visible
-     * @returns {boolean} - Visibility state
+     * Process toast queue
      */
-    isVisible() {
-        return this.elements.toast && !this.elements.toast.classList.contains('hidden');
+    processQueue() {
+        if (this.toastQueue.length > 0) {
+            const nextToast = this.toastQueue.shift();
+            setTimeout(() => {
+                this.show(nextToast.message, nextToast.type, nextToast.duration);
+            }, 100);
+        }
     }
 
     /**
-     * Dispatch toast event
-     * @param {string} eventType - Event type
-     * @param {Object} toastData - Toast data
+     * Clear all queued toasts
      */
-    dispatchToastEvent(eventType, toastData) {
-        const event = new CustomEvent(`toast:${eventType}`, {
-            detail: toastData,
-            bubbles: true
-        });
-        document.dispatchEvent(event);
+    clearQueue() {
+        this.toastQueue = [];
     }
-
-    // Convenience methods
 
     /**
      * Show success toast
      * @param {string} message - Success message
-     * @param {number} duration - Duration in milliseconds
+     * @param {number} duration - Display duration
      */
-    success(message, duration) {
+    success(message, duration = this.defaultDuration) {
         this.show(message, 'success', duration);
     }
 
     /**
      * Show error toast
      * @param {string} message - Error message
-     * @param {number} duration - Duration in milliseconds
+     * @param {number} duration - Display duration (0 = permanent)
      */
     error(message, duration = 5000) {
         this.show(message, 'error', duration);
@@ -455,7 +324,7 @@ class ToastController {
     /**
      * Show warning toast
      * @param {string} message - Warning message
-     * @param {number} duration - Duration in milliseconds
+     * @param {number} duration - Display duration
      */
     warning(message, duration = 4000) {
         this.show(message, 'warning', duration);
@@ -464,89 +333,201 @@ class ToastController {
     /**
      * Show info toast
      * @param {string} message - Info message
-     * @param {number} duration - Duration in milliseconds
+     * @param {number} duration - Display duration
      */
-    info(message, duration) {
+    info(message, duration = this.defaultDuration) {
         this.show(message, 'info', duration);
     }
 
     /**
-     * Clear all toasts including queue
+     * Show brief success message
+     * @param {string} message - Brief success message
      */
-    clearAll() {
-        this.toastQueue = [];
-        this.hide();
+    brief(message) {
+        this.show(message, 'success', 2000);
     }
 
     /**
-     * Get queue length
-     * @returns {number} - Number of queued toasts
-     */
-    getQueueLength() {
-        return this.toastQueue.length;
-    }
-
-    /**
-     * Get current toast data
-     * @returns {Object|null} - Current toast data
-     */
-    getCurrentToast() {
-        return this.currentToast;
-    }
-
-    // Static convenience method
-
-    /**
-     * Show toast message (static method)
-     * @param {string} message - Message to show
+     * Show persistent toast (no auto-hide)
+     * @param {string} message - Persistent message
      * @param {string} type - Toast type
-     * @param {number} duration - Duration in milliseconds
      */
-    static showMessage(message, type = 'info', duration = 3000) {
-        const event = new CustomEvent('app:toast', {
-            detail: { message, type, duration }
-        });
-        document.dispatchEvent(event);
+    persistent(message, type = 'info') {
+        this.show(message, type, 0);
     }
 
     /**
-     * Show success message (static method)
-     * @param {string} message - Success message
+     * Show loading toast
+     * @param {string} message - Loading message
+     * @returns {Function} - Function to hide the loading toast
      */
-    static success(message) {
-        ToastController.showMessage(message, 'success');
+    loading(message = 'Loading...') {
+        this.show(`⏳ ${message}`, 'info', 0);
+        
+        return () => {
+            this.hide();
+        };
     }
 
     /**
-     * Show error message (static method)
-     * @param {string} message - Error message
+     * Show confirmation toast with action
+     * @param {string} message - Confirmation message
+     * @param {Function} onConfirm - Confirmation callback
+     * @param {string} confirmText - Confirm button text
      */
-    static error(message) {
-        ToastController.showMessage(message, 'error', 5000);
+    confirm(message, onConfirm, confirmText = 'Confirm') {
+        // For simple implementation, use browser confirm
+        // In a more advanced version, this could create a custom toast with buttons
+        if (confirm(message)) {
+            onConfirm();
+        }
     }
 
     /**
-     * Show warning message (static method)
-     * @param {string} message - Warning message
+     * Show toast for authentication events
+     * @param {string} eventType - Auth event type
+     * @param {Object} details - Event details
      */
-    static warning(message) {
-        ToastController.showMessage(message, 'warning', 4000);
+    authEvent(eventType, details = {}) {
+        const messages = {
+            login: '✅ Successfully logged in',
+            logout: '👋 Logged out successfully',
+            register: '🎉 Account created successfully',
+            guest: '👤 Continuing in guest mode',
+            error: '❌ Authentication error',
+            expired: '⏰ Session expired - please login again'
+        };
+
+        const message = details.message || messages[eventType] || 'Authentication event';
+        const type = eventType === 'error' || eventType === 'expired' ? 'error' : 'success';
+        
+        this.show(message, type);
     }
 
     /**
-     * Show info message (static method)
-     * @param {string} message - Info message
+     * Show toast for data events
+     * @param {string} eventType - Data event type
+     * @param {Object} details - Event details
      */
-    static info(message) {
-        ToastController.showMessage(message, 'info');
+    dataEvent(eventType, details = {}) {
+        const messages = {
+            saved: '💾 Data saved successfully',
+            synced: '☁️ Data synced to cloud',
+            loaded: '📊 Data loaded successfully',
+            exported: '📁 Data exported successfully',
+            imported: '📥 Data imported successfully',
+            error: '❌ Data operation failed',
+            offline: '📡 Working offline - data saved locally'
+        };
+
+        const message = details.message || messages[eventType] || 'Data event';
+        const type = eventType === 'error' ? 'error' : 
+                    eventType === 'offline' ? 'warning' : 'success';
+        
+        this.show(message, type);
     }
 
     /**
-     * Cleanup resources
+     * Show toast for project events
+     * @param {string} eventType - Project event type
+     * @param {Object} details - Event details
+     */
+    projectEvent(eventType, details = {}) {
+        const messages = {
+            added: '📋 Project added successfully',
+            updated: '✏️ Project updated successfully',
+            deleted: '🗑️ Project deleted successfully',
+            activated: '▶️ Project activated',
+            deactivated: '⏸️ Project deactivated',
+            error: '❌ Project operation failed'
+        };
+
+        const message = details.message || messages[eventType] || 'Project event';
+        const type = eventType === 'error' ? 'error' : 'success';
+        
+        this.show(message, type);
+    }
+
+    /**
+     * Show toast for entry events
+     * @param {string} eventType - Entry event type
+     * @param {Object} details - Event details
+     */
+    entryEvent(eventType, details = {}) {
+        const messages = {
+            added: '✅ Entry added successfully',
+            updated: '✏️ Entry updated successfully',
+            deleted: '🗑️ Entry deleted successfully',
+            error: '❌ Entry operation failed'
+        };
+
+        const message = details.message || messages[eventType] || 'Entry event';
+        const type = eventType === 'error' ? 'error' : 'success';
+        
+        this.show(message, type);
+    }
+
+    /**
+     * Get current toast status
+     * @returns {Object} - Toast status
+     */
+    getStatus() {
+        return {
+            isVisible: this.isVisible,
+            currentToast: this.currentToast,
+            queueLength: this.toastQueue.length
+        };
+    }
+
+    /**
+     * Update default duration
+     * @param {number} duration - New default duration
+     */
+    setDefaultDuration(duration) {
+        this.defaultDuration = duration;
+    }
+
+    /**
+     * Destroy toast controller and cleanup
      */
     destroy() {
-        this.clearAll();
-        this.clearTimeout();
+        this.clearQueue();
+        if (this.elements.toast) {
+            this.elements.toast.remove();
+        }
+        if (this.elements.toastContainer && this.elements.toastContainer.children.length === 0) {
+            this.elements.toastContainer.remove();
+        }
+        this.isVisible = false;
+        this.currentToast = null;
+    }
+
+    /**
+     * Show multiple toasts in sequence
+     * @param {Array} toasts - Array of toast objects {message, type, duration}
+     * @param {number} delay - Delay between toasts
+     */
+    showSequence(toasts, delay = 500) {
+        toasts.forEach((toast, index) => {
+            setTimeout(() => {
+                this.show(toast.message, toast.type, toast.duration);
+            }, index * delay);
+        });
+    }
+
+    /**
+     * Show toast with custom styling
+     * @param {string} message - Message to display
+     * @param {Object} style - Custom style object
+     * @param {number} duration - Display duration
+     */
+    showCustom(message, style = {}, duration = this.defaultDuration) {
+        this.show(message, 'info', duration);
+        
+        // Apply custom styles
+        if (this.elements.toast) {
+            Object.assign(this.elements.toast.style, style);
+        }
     }
 }
 

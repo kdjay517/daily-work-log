@@ -1,4 +1,4 @@
-// controllers/DashboardController.js
+// controllers/DashboardController.js - UPDATED VERSION
 // Dashboard Controller for Monthly Summary, Historical Data, and Export Options
 
 class DashboardController {
@@ -15,47 +15,44 @@ class DashboardController {
     }
 
     /**
-     * Cache DOM elements
+     * Cache DOM elements - UPDATED with correct IDs from your HTML
      */
     cacheElements() {
         this.elements = {
-            // Monthly Summary
-            daysWorked: document.getElementById('daysWorked'),
-            totalHours: document.getElementById('totalHours'),
-            avgHours: document.getElementById('avgHours'),
-            totalEntries: document.getElementById('totalEntries'),
+            // Monthly Summary - Updated IDs to match your HTML structure
+            totalDaysWorked: document.getElementById('totalDaysWorked'),
+            totalHoursMonth: document.getElementById('totalHoursMonth'), 
+            averageHours: document.getElementById('averageHours'),
+            totalProjects: document.getElementById('totalProjects'),
             uniqueProjects: document.getElementById('uniqueProjects'),
             monthProgress: document.getElementById('monthProgress'),
-
+            
             // Historical Data
-            historicalList: document.getElementById('historicalList'),
-
-            // Export Options
-            exportCurrentMonthBtn: document.getElementById('exportCurrentMonthBtn'),
-            exportAllDataBtn: document.getElementById('exportAllDataBtn'),
-            exportBackupBtn: document.getElementById('exportBackupBtn'),
-            importBackupBtn: document.getElementById('importBackupBtn'),
+            historicalData: document.getElementById('historicalData'),
+            
+            // Export Options - Updated IDs to match your HTML
+            exportDaily: document.getElementById('exportDaily'),
+            exportMonth: document.getElementById('exportMonth'),
+            exportRange: document.getElementById('exportRange'),
+            exportAll: document.getElementById('exportAll'),
+            backupData: document.getElementById('backupData'),
+            restoreData: document.getElementById('restoreData'),
+            fileInput: document.getElementById('fileInput'),
+            
+            // Legacy export button
+            exportBtn: document.getElementById('exportBtn'),
+            
+            // Guest mode notice
             guestModeNotice: document.getElementById('guestModeNotice'),
-            backupFileInput: document.getElementById('backupFileInput'),
-
-            // Analytics Modal
+            
+            // Analytics Modal (if exists)
             analyticsBtn: document.getElementById('analyticsBtn'),
             analyticsModal: document.getElementById('analyticsModal'),
             closeAnalyticsBtn: document.getElementById('closeAnalyticsBtn'),
-            analyticsContent: document.getElementById('analyticsContent'),
-
-            // Export Modal
-            exportBtn: document.getElementById('exportBtn'),
-            exportModal: document.getElementById('exportModal'),
-            closeExportModalBtn: document.getElementById('closeExportModalBtn'),
-            exportFormat: document.getElementById('exportFormat'),
-            exportRange: document.getElementById('exportRange'),
-            customDateRange: document.getElementById('customDateRange'),
-            exportStartDate: document.getElementById('exportStartDate'),
-            exportEndDate: document.getElementById('exportEndDate'),
-            executeExportBtn: document.getElementById('executeExportBtn'),
-            cancelExportBtn: document.getElementById('cancelExportBtn')
+            analyticsContent: document.getElementById('analyticsContent')
         };
+
+        console.log('DashboardController: Elements cached', this.elements);
     }
 
     /**
@@ -65,10 +62,12 @@ class DashboardController {
         this.setupEventListeners();
         this.refreshDashboard();
         
-        // Set up auto-refresh
+        // Set up auto-refresh every 5 minutes
         this.updateInterval = setInterval(() => {
             this.refreshDashboard();
-        }, 300000); // Refresh every 5 minutes
+        }, 300000);
+
+        console.log('DashboardController: Initialized successfully');
     }
 
     /**
@@ -76,103 +75,74 @@ class DashboardController {
      */
     setupEventListeners() {
         // Export buttons
-        if (this.elements.exportCurrentMonthBtn) {
-            this.addEventListenerWithCleanup(this.elements.exportCurrentMonthBtn, 'click', () => {
+        if (this.elements.exportDaily) {
+            this.addEventListenerWithCleanup(this.elements.exportDaily, 'click', () => {
+                this.handleExportSelectedDay();
+            });
+        }
+
+        if (this.elements.exportMonth) {
+            this.addEventListenerWithCleanup(this.elements.exportMonth, 'click', () => {
                 this.handleExportCurrentMonth();
             });
         }
 
-        if (this.elements.exportAllDataBtn) {
-            this.addEventListenerWithCleanup(this.elements.exportAllDataBtn, 'click', () => {
+        if (this.elements.exportRange) {
+            this.addEventListenerWithCleanup(this.elements.exportRange, 'click', () => {
+                this.handleExportDateRange();
+            });
+        }
+
+        if (this.elements.exportAll) {
+            this.addEventListenerWithCleanup(this.elements.exportAll, 'click', () => {
                 this.handleExportAllData();
             });
         }
 
-        if (this.elements.exportBackupBtn) {
-            this.addEventListenerWithCleanup(this.elements.exportBackupBtn, 'click', () => {
+        // Backup/Restore buttons
+        if (this.elements.backupData) {
+            this.addEventListenerWithCleanup(this.elements.backupData, 'click', () => {
                 this.handleExportBackup();
             });
         }
 
-        if (this.elements.importBackupBtn) {
-            this.addEventListenerWithCleanup(this.elements.importBackupBtn, 'click', () => {
+        if (this.elements.restoreData) {
+            this.addEventListenerWithCleanup(this.elements.restoreData, 'click', () => {
                 this.handleImportBackup();
             });
         }
 
-        // Backup file input
-        if (this.elements.backupFileInput) {
-            this.addEventListenerWithCleanup(this.elements.backupFileInput, 'change', (e) => {
+        // Legacy export button (for compatibility)
+        if (this.elements.exportBtn) {
+            this.addEventListenerWithCleanup(this.elements.exportBtn, 'click', () => {
+                this.handleExportCurrentMonth();
+            });
+        }
+
+        // File input for backup restore
+        if (this.elements.fileInput) {
+            this.addEventListenerWithCleanup(this.elements.fileInput, 'change', (e) => {
                 this.handleFileImport(e.target.files[0]);
             });
         }
 
-        // Analytics modal
+        // Analytics modal (if exists)
         if (this.elements.analyticsBtn) {
             this.addEventListenerWithCleanup(this.elements.analyticsBtn, 'click', () => {
                 this.showAnalyticsModal();
             });
         }
 
-        if (this.elements.closeAnalyticsBtn) {
-            this.addEventListenerWithCleanup(this.elements.closeAnalyticsBtn, 'click', () => {
-                this.hideAnalyticsModal();
-            });
-        }
-
-        // Export modal
-        if (this.elements.exportBtn) {
-            this.addEventListenerWithCleanup(this.elements.exportBtn, 'click', () => {
-                this.showExportModal();
-            });
-        }
-
-        if (this.elements.closeExportModalBtn) {
-            this.addEventListenerWithCleanup(this.elements.closeExportModalBtn, 'click', () => {
-                this.hideExportModal();
-            });
-        }
-
-        if (this.elements.exportRange) {
-            this.addEventListenerWithCleanup(this.elements.exportRange, 'change', () => {
-                this.handleExportRangeChange();
-            });
-        }
-
-        if (this.elements.executeExportBtn) {
-            this.addEventListenerWithCleanup(this.elements.executeExportBtn, 'click', () => {
-                this.handleCustomExport();
-            });
-        }
-
-        if (this.elements.cancelExportBtn) {
-            this.addEventListenerWithCleanup(this.elements.cancelExportBtn, 'click', () => {
-                this.hideExportModal();
-            });
-        }
-
-        // Listen for data changes
+        // Listen for data changes to refresh dashboard
         document.addEventListener('data:updated', () => {
             this.refreshDashboard();
         });
 
-        // Close modals on escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.hideAllModals();
-            }
+        document.addEventListener('calendar:dateSelected', () => {
+            this.updateExportButtonStates();
         });
 
-        // Close modals on overlay click
-        [this.elements.analyticsModal, this.elements.exportModal].forEach(modal => {
-            if (modal) {
-                this.addEventListenerWithCleanup(modal, 'click', (e) => {
-                    if (e.target === modal) {
-                        this.hideAllModals();
-                    }
-                });
-            }
-        });
+        console.log('DashboardController: Event listeners set up');
     }
 
     /**
@@ -186,48 +156,95 @@ class DashboardController {
     }
 
     /**
-     * Refresh dashboard data
+     * Refresh dashboard data - UPDATED to work without analytics/export services
      */
     async refreshDashboard() {
         try {
             await Promise.all([
                 this.updateMonthlySummary(),
-                this.updateHistoricalData()
+                this.updateHistoricalData(),
+                this.updateExportButtonStates(),
+                this.updateGuestModeNotice()
             ]);
+            console.log('DashboardController: Dashboard refreshed');
         } catch (error) {
             console.error('Dashboard refresh error:', error);
         }
     }
 
     /**
-     * Update monthly summary section
+     * Update monthly summary section - UPDATED to work directly with dataService
      */
     async updateMonthlySummary() {
         try {
-            const summary = this.analyticsService.calculateMonthlySummary();
+            const currentDate = new Date();
+            const currentMonth = currentDate.getMonth();
+            const currentYear = currentDate.getFullYear();
             
-            if (this.elements.daysWorked) {
-                this.elements.daysWorked.textContent = summary.daysWorked;
+            // Get work log data directly from dataService
+            const workLogData = this.dataService.getWorkLogData();
+            
+            // Calculate statistics
+            let daysWorked = 0;
+            let totalHours = 0;
+            let totalEntries = 0;
+            let uniqueProjects = new Set();
+            
+            Object.keys(workLogData).forEach(dateKey => {
+                const date = new Date(dateKey);
+                if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
+                    const dayEntries = workLogData[dateKey];
+                    let hasWorkEntry = false;
+                    
+                    dayEntries.forEach(entry => {
+                        totalEntries++;
+                        
+                        if (entry.type === 'work') {
+                            hasWorkEntry = true;
+                            totalHours += entry.hours || 0;
+                            if (entry.project) {
+                                uniqueProjects.add(entry.project);
+                            }
+                        } else if (['fullLeave', 'halfLeave', 'holiday'].includes(entry.type)) {
+                            hasWorkEntry = true; // Count as work day for attendance
+                        }
+                    });
+                    
+                    if (hasWorkEntry) {
+                        daysWorked++;
+                    }
+                }
+            });
+            
+            // Calculate derived statistics
+            const avgHours = daysWorked > 0 ? totalHours / daysWorked : 0;
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const currentDayOfMonth = currentDate.getDate();
+            const monthProgress = (currentDayOfMonth / daysInMonth) * 100;
+            
+            // Update DOM elements
+            if (this.elements.totalDaysWorked) {
+                this.elements.totalDaysWorked.textContent = daysWorked;
             }
             
-            if (this.elements.totalHours) {
-                this.elements.totalHours.textContent = summary.totalHours.toFixed(2);
+            if (this.elements.totalHoursMonth) {
+                this.elements.totalHoursMonth.textContent = totalHours.toFixed(2);
             }
             
-            if (this.elements.avgHours) {
-                this.elements.avgHours.textContent = summary.avgHours.toFixed(2);
+            if (this.elements.averageHours) {
+                this.elements.averageHours.textContent = avgHours.toFixed(2);
             }
             
-            if (this.elements.totalEntries) {
-                this.elements.totalEntries.textContent = summary.totalEntries;
+            if (this.elements.totalProjects) {
+                this.elements.totalProjects.textContent = totalEntries;
             }
             
             if (this.elements.uniqueProjects) {
-                this.elements.uniqueProjects.textContent = summary.uniqueProjects;
+                this.elements.uniqueProjects.textContent = uniqueProjects.size;
             }
             
             if (this.elements.monthProgress) {
-                this.elements.monthProgress.textContent = `${summary.monthProgress}%`;
+                this.elements.monthProgress.textContent = `${monthProgress.toFixed(1)}%`;
             }
             
         } catch (error) {
@@ -237,50 +254,89 @@ class DashboardController {
     }
 
     /**
-     * Update historical data section
+     * Update historical data section - UPDATED to work directly with dataService
      */
     async updateHistoricalData() {
         try {
-            const historicalData = this.analyticsService.getHistoricalData();
+            const workLogData = this.dataService.getWorkLogData();
             
-            if (!this.elements.historicalList) return;
+            if (!this.elements.historicalData) return;
             
-            if (historicalData.length === 0) {
-                this.elements.historicalList.innerHTML = `
-                    <div class="no-data-state">
-                        <div class="no-data-icon">📊</div>
-                        <div class="no-data-message">No historical data available</div>
-                        <div class="no-data-hint">Start logging work entries to see historical trends</div>
+            // Group data by month
+            const monthlyData = {};
+            
+            Object.keys(workLogData).forEach(dateKey => {
+                const date = new Date(dateKey);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                
+                if (!monthlyData[monthKey]) {
+                    monthlyData[monthKey] = {
+                        period: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+                        daysWorked: new Set(),
+                        totalHours: 0,
+                        date: date
+                    };
+                }
+                
+                const dayEntries = workLogData[dateKey];
+                let hasWorkDay = false;
+                
+                dayEntries.forEach(entry => {
+                    if (entry.type === 'work') {
+                        hasWorkDay = true;
+                        monthlyData[monthKey].totalHours += entry.hours || 0;
+                    } else if (['fullLeave', 'halfLeave', 'holiday'].includes(entry.type)) {
+                        hasWorkDay = true;
+                    }
+                });
+                
+                if (hasWorkDay) {
+                    monthlyData[monthKey].daysWorked.add(dateKey);
+                }
+            });
+            
+            // Convert to array and sort by date (newest first)
+            const monthlyArray = Object.values(monthlyData)
+                .sort((a, b) => b.date - a.date)
+                .slice(0, 12); // Show last 12 months
+            
+            if (monthlyArray.length === 0) {
+                this.elements.historicalData.innerHTML = `
+                    <div class="no-historical-data">
+                        <div class="icon">📊</div>
+                        <div>No historical data available</div>
+                        <small>Start logging work entries to see trends</small>
                     </div>
                 `;
                 return;
             }
             
-            const historicalHTML = historicalData.map(item => `
+            // Generate historical data HTML
+            const historicalHTML = monthlyArray.map(item => `
                 <div class="historical-item">
                     <div class="historical-period">${item.period}</div>
                     <div class="historical-stats">
                         <div class="historical-stat">
                             <span>📅</span>
-                            <span>${item.daysWorked} days</span>
+                            <span>${item.daysWorked.size} days</span>
                         </div>
                         <div class="historical-stat">
                             <span>⏰</span>
-                            <span>${item.totalHours}h</span>
+                            <span>${item.totalHours.toFixed(1)}h</span>
                         </div>
                     </div>
                 </div>
             `).join('');
             
-            this.elements.historicalList.innerHTML = historicalHTML;
+            this.elements.historicalData.innerHTML = historicalHTML;
             
         } catch (error) {
             console.error('Historical data update error:', error);
-            if (this.elements.historicalList) {
-                this.elements.historicalList.innerHTML = `
-                    <div class="no-data-state">
-                        <div class="no-data-icon">⚠️</div>
-                        <div class="no-data-message">Error loading historical data</div>
+            if (this.elements.historicalData) {
+                this.elements.historicalData.innerHTML = `
+                    <div class="no-historical-data">
+                        <div class="icon">⚠️</div>
+                        <div>Error loading historical data</div>
                     </div>
                 `;
             }
@@ -288,16 +344,82 @@ class DashboardController {
     }
 
     /**
-     * Handle export current month
+     * Update export button states
      */
+    updateExportButtonStates() {
+        // Get current app state
+        const hasData = Object.keys(this.dataService.getWorkLogData()).length > 0;
+        const selectedDate = window.app?.calendarView?.selectedDate;
+        const hasSelectedDateData = selectedDate && this.dataService.getWorkLogData()[this.formatDateKey(selectedDate)];
+
+        // Update button states
+        if (this.elements.exportDaily) {
+            this.elements.exportDaily.disabled = !hasSelectedDateData;
+        }
+
+        if (this.elements.exportMonth) {
+            this.elements.exportMonth.disabled = !this.hasCurrentMonthData();
+        }
+
+        if (this.elements.exportRange) {
+            this.elements.exportRange.disabled = !hasData;
+        }
+
+        if (this.elements.exportAll) {
+            this.elements.exportAll.disabled = !hasData;
+        }
+    }
+
+    /**
+     * Update guest mode notice
+     */
+    updateGuestModeNotice() {
+        if (this.elements.guestModeNotice) {
+            const isGuest = window.app?.user?.isGuest() || false;
+            this.elements.guestModeNotice.style.display = isGuest ? 'block' : 'none';
+        }
+    }
+
+    /**
+     * Check if current month has data
+     */
+    hasCurrentMonthData() {
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        const workLogData = this.dataService.getWorkLogData();
+        
+        return Object.keys(workLogData).some(dateKey => {
+            const date = new Date(dateKey);
+            return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+        });
+    }
+
+    // Export handlers
+    async handleExportSelectedDay() {
+        const selectedDate = window.app?.calendarView?.selectedDate;
+        if (!selectedDate) {
+            this.showToast('❌ Please select a date first');
+            return;
+        }
+
+        try {
+            this.showLoadingState('Exporting selected day...');
+            const result = await this.exportSelectedDayData(selectedDate);
+            this.showToast('✅ Day exported successfully');
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showToast('❌ Export failed: ' + error.message);
+        } finally {
+            this.hideLoadingState();
+        }
+    }
+
     async handleExportCurrentMonth() {
         try {
             this.showLoadingState('Exporting current month...');
-            
-            const result = await this.exportService.exportCurrentMonthCSV();
-            
-            this.showToast('✅ Export successful! ' + result.message);
-            
+            const result = await this.exportCurrentMonthData();
+            this.showToast('✅ Month exported successfully');
         } catch (error) {
             console.error('Export error:', error);
             this.showToast('❌ Export failed: ' + error.message);
@@ -306,17 +428,25 @@ class DashboardController {
         }
     }
 
-    /**
-     * Handle export all data
-     */
+    async handleExportDateRange() {
+        // Show date range modal or use default range
+        try {
+            this.showLoadingState('Exporting date range...');
+            const result = await this.exportDateRangeData();
+            this.showToast('✅ Date range exported successfully');
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showToast('❌ Export failed: ' + error.message);
+        } finally {
+            this.hideLoadingState();
+        }
+    }
+
     async handleExportAllData() {
         try {
             this.showLoadingState('Exporting all data...');
-            
-            const result = await this.exportService.exportAllDataCSV();
-            
-            this.showToast('✅ Export successful! ' + result.message);
-            
+            const result = await this.exportAllData();
+            this.showToast('✅ All data exported successfully');
         } catch (error) {
             console.error('Export error:', error);
             this.showToast('❌ Export failed: ' + error.message);
@@ -325,17 +455,11 @@ class DashboardController {
         }
     }
 
-    /**
-     * Handle export backup
-     */
     async handleExportBackup() {
         try {
             this.showLoadingState('Creating backup...');
-            
-            const result = await this.exportService.exportDataBackup();
-            
-            this.showToast('✅ Backup created! ' + result.message);
-            
+            const result = await this.createBackup();
+            this.showToast('✅ Backup created successfully');
         } catch (error) {
             console.error('Backup error:', error);
             this.showToast('❌ Backup failed: ' + error.message);
@@ -344,18 +468,12 @@ class DashboardController {
         }
     }
 
-    /**
-     * Handle import backup
-     */
     handleImportBackup() {
-        if (this.elements.backupFileInput) {
-            this.elements.backupFileInput.click();
+        if (this.elements.fileInput) {
+            this.elements.fileInput.click();
         }
     }
 
-    /**
-     * Handle file import
-     */
     async handleFileImport(file) {
         if (!file) return;
         
@@ -366,240 +484,193 @@ class DashboardController {
         
         try {
             this.showLoadingState('Importing backup...');
-            
-            const result = await this.exportService.importDataBackup(file);
-            
-            this.showToast('✅ Import successful! ' + result.message);
-            
-            // Refresh dashboard and trigger app refresh
+            const result = await this.importBackup(file);
+            this.showToast('✅ Import successful');
             this.refreshDashboard();
-            document.dispatchEvent(new CustomEvent('data:imported', { detail: result }));
-            
+            document.dispatchEvent(new CustomEvent('data:imported'));
         } catch (error) {
             console.error('Import error:', error);
             this.showToast('❌ Import failed: ' + error.message);
         } finally {
             this.hideLoadingState();
-            // Clear the file input
-            if (this.elements.backupFileInput) {
-                this.elements.backupFileInput.value = '';
+            if (this.elements.fileInput) {
+                this.elements.fileInput.value = '';
             }
         }
     }
 
-    /**
-     * Show analytics modal
-     */
-    showAnalyticsModal() {
-        if (this.elements.analyticsModal) {
-            this.elements.analyticsModal.classList.remove('hidden');
-            this.loadAnalyticsContent();
-        }
-    }
-
-    /**
-     * Hide analytics modal
-     */
-    hideAnalyticsModal() {
-        if (this.elements.analyticsModal) {
-            this.elements.analyticsModal.classList.add('hidden');
-        }
-    }
-
-    /**
-     * Show export modal
-     */
-    showExportModal() {
-        if (this.elements.exportModal) {
-            this.elements.exportModal.classList.remove('hidden');
-            this.initializeExportModal();
-        }
-    }
-
-    /**
-     * Hide export modal
-     */
-    hideExportModal() {
-        if (this.elements.exportModal) {
-            this.elements.exportModal.classList.add('hidden');
-        }
-    }
-
-    /**
-     * Hide all modals
-     */
-    hideAllModals() {
-        this.hideAnalyticsModal();
-        this.hideExportModal();
-    }
-
-    /**
-     * Load analytics content
-     */
-    loadAnalyticsContent() {
-        if (!this.elements.analyticsContent) return;
+    // Export implementation methods
+    async exportSelectedDayData(date) {
+        const dateKey = this.formatDateKey(date);
+        const entries = this.dataService.getWorkLogData()[dateKey] || [];
         
-        try {
-            const productivity = this.analyticsService.getProductivityTrends(6);
-            const projects = this.analyticsService.getProjectAnalytics();
-            const summary = this.analyticsService.calculateMonthlySummary();
-            
-            this.elements.analyticsContent.innerHTML = `
-                <div class="analytics-overview">
-                    <h3>📊 Overview</h3>
-                    <div class="analytics-grid">
-                        <div class="analytics-card">
-                            <h4>Current Month</h4>
-                            <p>${summary.daysWorked} days worked</p>
-                            <p>${summary.totalHours} total hours</p>
-                            <p>${summary.avgHours.toFixed(2)} avg hours/day</p>
-                        </div>
-                        <div class="analytics-card">
-                            <h4>Productivity</h4>
-                            <p>${summary.monthProgress.toFixed(1)}% month complete</p>
-                            <p>${summary.uniqueProjects} active projects</p>
-                            <p>${summary.totalEntries} total entries</p>
-                        </div>
-                    </div>
+        if (entries.length === 0) {
+            throw new Error('No entries found for selected date');
+        }
+        
+        const csvContent = this.createCSVFromEntries(entries, dateKey);
+        const filename = `work-log-${dateKey}.csv`;
+        this.downloadFile(csvContent, filename, 'text/csv');
+        
+        return { message: `${entries.length} entries exported` };
+    }
+
+    async exportCurrentMonthData() {
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        const workLogData = this.dataService.getWorkLogData();
+        const monthEntries = [];
+        
+        Object.keys(workLogData).forEach(dateKey => {
+            const date = new Date(dateKey);
+            if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
+                workLogData[dateKey].forEach(entry => {
+                    monthEntries.push({ ...entry, date: dateKey });
+                });
+            }
+        });
+        
+        if (monthEntries.length === 0) {
+            throw new Error('No entries found for current month');
+        }
+        
+        const csvContent = this.createCSVFromEntries(monthEntries);
+        const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const filename = `work-log-${monthName.replace(' ', '-').toLowerCase()}.csv`;
+        this.downloadFile(csvContent, filename, 'text/csv');
+        
+        return { message: `${monthEntries.length} entries exported` };
+    }
+
+    async exportAllData() {
+        const workLogData = this.dataService.getWorkLogData();
+        const allEntries = [];
+        
+        Object.keys(workLogData).forEach(dateKey => {
+            workLogData[dateKey].forEach(entry => {
+                allEntries.push({ ...entry, date: dateKey });
+            });
+        });
+        
+        if (allEntries.length === 0) {
+            throw new Error('No data to export');
+        }
+        
+        const csvContent = this.createCSVFromEntries(allEntries);
+        const filename = `work-log-all-data-${new Date().toISOString().split('T')[0]}.csv`;
+        this.downloadFile(csvContent, filename, 'text/csv');
+        
+        return { message: `${allEntries.length} entries exported` };
+    }
+
+    async createBackup() {
+        const backupData = {
+            version: '2.1',
+            exportDate: new Date().toISOString(),
+            workLogData: this.dataService.getWorkLogData(),
+            projectData: this.dataService.getProjects(),
+            metadata: {
+                totalEntries: Object.values(this.dataService.getWorkLogData()).reduce((sum, entries) => sum + entries.length, 0),
+                exportedBy: 'Daily Work Log Tracker'
+            }
+        };
+        
+        const jsonContent = JSON.stringify(backupData, null, 2);
+        const filename = `work-log-backup-${new Date().toISOString().split('T')[0]}.json`;
+        this.downloadFile(jsonContent, filename, 'application/json');
+        
+        return { message: 'Backup created successfully' };
+    }
+
+    async importBackup(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const backupData = JSON.parse(e.target.result);
                     
-                    <h4>🚀 Top Projects</h4>
-                    <div class="project-analytics">
-                        ${projects.slice(0, 5).map(project => `
-                            <div class="project-stat">
-                                <div class="project-name">${this.getProjectDisplayName(project.project)}</div>
-                                <div class="project-hours">${project.totalHours.toFixed(2)}h</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-            
-        } catch (error) {
-            console.error('Analytics content error:', error);
-            this.elements.analyticsContent.innerHTML = `
-                <div class="error-state">
-                    <p>⚠️ Error loading analytics data</p>
-                </div>
-            `;
-        }
-    }
-
-    /**
-     * Initialize export modal
-     */
-    initializeExportModal() {
-        if (this.elements.exportStartDate && this.elements.exportEndDate) {
-            const today = new Date().toISOString().split('T')[0];
-            const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-                .toISOString().split('T')[0];
-                
-            this.elements.exportStartDate.value = firstDayOfMonth;
-            this.elements.exportEndDate.value = today;
-        }
-        
-        this.handleExportRangeChange();
-    }
-
-    /**
-     * Handle export range change
-     */
-    handleExportRangeChange() {
-        if (!this.elements.exportRange || !this.elements.customDateRange) return;
-        
-        const isCustom = this.elements.exportRange.value === 'custom';
-        this.elements.customDateRange.style.display = isCustom ? 'flex' : 'none';
-    }
-
-    /**
-     * Handle custom export
-     */
-    async handleCustomExport() {
-        try {
-            const format = this.elements.exportFormat?.value || 'csv';
-            const range = this.elements.exportRange?.value || 'current-month';
-            
-            let startDate, endDate;
-            
-            if (range === 'custom') {
-                startDate = new Date(this.elements.exportStartDate?.value);
-                endDate = new Date(this.elements.exportEndDate?.value);
-                
-                if (!this.elements.exportStartDate?.value || !this.elements.exportEndDate?.value) {
-                    this.showToast('❌ Please select both start and end dates');
-                    return;
+                    if (!backupData.workLogData || !backupData.projectData) {
+                        throw new Error('Invalid backup file format');
+                    }
+                    
+                    // Simple import - could be enhanced with merge options
+                    await this.dataService.importData(backupData.workLogData, backupData.projectData);
+                    
+                    resolve({ message: 'Data imported successfully' });
+                } catch (error) {
+                    reject(error);
                 }
-                
-                if (startDate > endDate) {
-                    this.showToast('❌ Start date must be before end date');
-                    return;
-                }
-            } else {
-                // Calculate date range based on selection
-                const dateRange = this.calculateDateRange(range);
-                startDate = dateRange.start;
-                endDate = dateRange.end;
-            }
-            
-            this.showLoadingState('Preparing export...');
-            
-            const result = await this.exportService.exportCustomRange(startDate, endDate, format);
-            
-            this.showToast('✅ Export successful! ' + result.message);
-            this.hideExportModal();
-            
-        } catch (error) {
-            console.error('Custom export error:', error);
-            this.showToast('❌ Export failed: ' + error.message);
-        } finally {
-            this.hideLoadingState();
-        }
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsText(file);
+        });
     }
 
-    /**
-     * Calculate date range based on selection
-     */
-    calculateDateRange(range) {
-        const today = new Date();
-        let start, end;
+    // Utility methods
+    createCSVFromEntries(entries, singleDate = null) {
+        const headers = ['Date', 'Entry Type', 'Project', 'Hours', 'Comments'];
+        const csvRows = [headers.join(',')];
         
-        switch (range) {
-            case 'current-month':
-                start = new Date(today.getFullYear(), today.getMonth(), 1);
-                end = new Date(today);
-                break;
-                
-            case 'last-month':
-                start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                end = new Date(today.getFullYear(), today.getMonth(), 0);
-                break;
-                
-            case 'last-3-months':
-                start = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-                end = new Date(today);
-                break;
-                
-            case 'all-data':
-                const dateRange = this.exportService.getDateRange();
-                start = dateRange.earliest ? new Date(dateRange.earliest) : new Date();
-                end = dateRange.latest ? new Date(dateRange.latest) : new Date();
-                break;
-                
-            default:
-                start = new Date(today.getFullYear(), today.getMonth(), 1);
-                end = new Date(today);
-        }
+        entries.forEach(entry => {
+            const date = entry.date || singleDate;
+            const type = this.getEntryTypeLabel(entry.type);
+            const project = this.getProjectDisplayName(entry.project);
+            const hours = this.getEntryHours(entry);
+            const comments = (entry.comments || '').replace(/"/g, '""');
+            
+            csvRows.push([date, `"${type}"`, `"${project}"`, hours, `"${comments}"`].join(','));
+        });
         
-        return { start, end };
+        return csvRows.join('\n');
     }
 
-    /**
-     * Get project display name
-     */
+    getEntryTypeLabel(type) {
+        const types = {
+            work: 'Work Entry',
+            fullLeave: 'Full Day Leave',
+            halfLeave: 'Half Day Leave',
+            holiday: 'Holiday'
+        };
+        return types[type] || type;
+    }
+
+    getEntryHours(entry) {
+        if (entry.type === 'work') return entry.hours || 0;
+        if (entry.type === 'fullLeave' || entry.type === 'holiday') return 8;
+        if (entry.type === 'halfLeave') return 4;
+        return 0;
+    }
+
     getProjectDisplayName(projectValue) {
-        if (!projectValue) return 'Unknown Project';
-        
+        if (!projectValue) return 'N/A';
         const project = this.dataService.findProjectByValue(projectValue);
         return project ? `${project.projectId} - ${project.projectTitle}` : projectValue;
+    }
+
+    formatDateKey(date) {
+        return date.toISOString().split('T')[0];
+    }
+
+    downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+
+    // Modal methods (kept for compatibility)
+    showAnalyticsModal() {
+        this.showToast('📊 Advanced analytics coming soon!');
     }
 
     /**
@@ -607,10 +678,10 @@ class DashboardController {
      */
     showErrorInSummary() {
         const summaryElements = [
-            this.elements.daysWorked,
-            this.elements.totalHours,
-            this.elements.avgHours,
-            this.elements.totalEntries,
+            this.elements.totalDaysWorked,
+            this.elements.totalHoursMonth,
+            this.elements.averageHours,
+            this.elements.totalProjects,
             this.elements.uniqueProjects,
             this.elements.monthProgress
         ];

@@ -1,233 +1,380 @@
 // models/User.js
-// User Model with Authentication Logic
+// User Model Class - Authentication and User Management
 
 class User {
     constructor(firebaseConfig) {
         this.firebaseConfig = firebaseConfig;
         this.currentUser = null;
-        this.isGuestMode = false;
+        this.isGuestUser = false;
+        this.profile = {};
+        this.onAuthStateChangedCallbacks = [];
     }
 
     /**
-     * Login user with email and password
+     * Set up authentication state listener
+     * @param {Function} callback - Callback function when auth state changes
+     */
+    onAuthStateChanged(callback) {
+        this.onAuthStateChangedCallbacks.push(callback);
+        
+        if (this.firebaseConfig && this.firebaseConfig.isInitialized()) {
+            const auth = this.firebaseConfig.getAuth();
+            if (auth) {
+                auth.onAuthStateChanged(callback);
+            }
+        }
+        
+        // Call immediately with current state
+        callback(this.currentUser);
+    }
+
+    /**
+     * Login with email and password
      * @param {string} email - User email
      * @param {string} password - User password
-     * @returns {Promise<firebase.User>} - Authenticated user
+     * @returns {Promise} - Login result
      */
     async login(email, password) {
-        if (!this.firebaseConfig.isInitialized()) {
-            throw new Error('Firebase is not available. Please use Guest mode.');
-        }
-
-        if (!email || !password) {
-            throw new Error('Please fill in all fields');
+        if (!this.firebaseConfig || !this.firebaseConfig.isInitialized()) {
+            throw new Error('Firebase not initialized');
         }
 
         const auth = this.firebaseConfig.getAuth();
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        this.currentUser = userCredential.user;
-        this.isGuestMode = false;
+        const { signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
         
-        return this.currentUser;
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        this.currentUser = userCredential.user;
+        this.isGuestUser = false;
+        
+        await this.loadUserProfile();
+        return userCredential;
     }
 
     /**
-     * Register new user
+     * Register new user with email and password
      * @param {Object} userData - User registration data
-     * @returns {Promise<firebase.User>} - Created user
+     * @returns {Promise} - Registration result
      */
     async register(userData) {
-        const { name, email, password, confirmPassword } = userData;
-        
-        if (!this.firebaseConfig.isInitialized()) {
-            throw new Error('Firebase is not available. Please use Guest mode.');
-        }
-
-        // Validation
-        const errors = [];
-        if (!name) errors.push('Full name is required');
-        if (!email) errors.push('Email is required');
-        if (!password) errors.push('Password is required');
-        if (password.length < 6) errors.push('Password must be at least 6 characters');
-        if (password !== confirmPassword) errors.push('Passwords do not match');
-
-        if (errors.length > 0) {
-            throw new Error(errors.join(', '));
+        if (!this.firebaseConfig || !this.firebaseConfig.isInitialized()) {
+            throw new Error('Firebase not initialized');
         }
 
         const auth = this.firebaseConfig.getAuth();
         const db = this.firebaseConfig.getDatabase();
-        
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        await userCredential.user.updateProfile({ displayName: name });
+        const { createUserWithEmailAndPassword, updateProfile } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+        const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-        // Initialize user document in Firestore
-        const docRef = db.collection('workLogs').doc(userCredential.user.uid);
-        await docRef.set({
-            entries: {},
-            projects: [],
-            userInfo: {
-                name: name,
-                email: email,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            },
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        // Create user account
+        const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+        const user = userCredential.user;
+
+        // Update user profile
+        await updateProfile(user, {
+            displayName: userData.name
         });
 
-        this.currentUser = userCredential.user;
-        this.isGuestMode = false;
-        
-        return this.currentUser;
-    }
+        // Create user document in Firestore
+        await setDoc(doc(db, 'users', user.uid), {
+            name: userData.name,
+            email: userData.email,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
 
-    /**
-     * Logout current user
-     */
-    async logout() {
-        if (this.currentUser && this.firebaseConfig.isInitialized()) {
-            const auth = this.firebaseConfig.getAuth();
-            await auth.signOut();
-        }
-        
-        this.currentUser = null;
-        this.isGuestMode = false;
+        this.currentUser = user;
+        this.isGuestUser = false;
+        this.profile = {
+            name: userData.name,
+            email: userData.email
+        };
+
+        return userCredential;
     }
 
     /**
      * Continue as guest user
-     * @returns {boolean} - Success status
      */
     continueAsGuest() {
-        this.isGuestMode = true;
+        this.isGuestUser = true;
+        this.currentUser = {
+            uid: `guest_${Date.now()}`,
+            email: 'guest@local.com',
+            displayName: 'Guest User'
+        };
+        this.profile = {
+            name: 'Guest User',
+            email: 'guest@local.com'
+        };
+
+        // Notify auth state change callbacks
+        this.onAuthStateChangedCallbacks.forEach(callback => {
+            callback(this.currentUser);
+        });
+    }
+
+    /**
+     * Logout current user
+     * @returns {Promise} - Logout result
+     */
+    async logout() {
+        if (this.isGuestUser) {
+            this.currentUser = null;
+            this.isGuestUser = false;
+            this.profile = {};
+            
+            // Clear guest data from localStorage
+            localStorage.removeItem('guestMode');
+            return true;
+        }
+
+        if (this.firebaseConfig && this.firebaseConfig.isInitialized()) {
+            const auth = this.firebaseConfig.getAuth();
+            const { signOut } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+            await signOut(auth);
+        }
+
         this.currentUser = null;
+        this.isGuestUser = false;
+        this.profile = {};
         return true;
     }
 
     /**
-     * Get current authenticated user
-     * @returns {firebase.User|null}
+     * Load user profile from Firestore
+     */
+    async loadUserProfile() {
+        if (!this.currentUser || this.isGuestUser) return;
+
+        try {
+            const db = this.firebaseConfig.getDatabase();
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            
+            const userDoc = await getDoc(doc(db, 'users', this.currentUser.uid));
+            if (userDoc.exists()) {
+                this.profile = userDoc.data();
+            } else {
+                this.profile = {
+                    name: this.currentUser.displayName || 'User',
+                    email: this.currentUser.email
+                };
+            }
+        } catch (error) {
+            console.error('Error loading user profile:', error);
+            this.profile = {
+                name: this.currentUser.displayName || 'User',
+                email: this.currentUser.email
+            };
+        }
+    }
+
+    /**
+     * Check if user is authenticated
+     * @returns {boolean} - Authentication status
+     */
+    isAuthenticated() {
+        return !!this.currentUser && !this.isGuestUser;
+    }
+
+    /**
+     * Check if user is in guest mode
+     * @returns {boolean} - Guest mode status
+     */
+    isGuest() {
+        return this.isGuestUser;
+    }
+
+    /**
+     * Get current user object
+     * @returns {Object|null} - Current user
      */
     getCurrentUser() {
         return this.currentUser;
     }
 
     /**
-     * Check if user is in guest mode
-     * @returns {boolean}
+     * Get user profile
+     * @returns {Object} - User profile
      */
-    isGuest() {
-        return this.isGuestMode;
-    }
-
-    /**
-     * Check if user is authenticated
-     * @returns {boolean}
-     */
-    isAuthenticated() {
-        return this.currentUser !== null;
+    getUserProfile() {
+        return {
+            ...this.profile,
+            uid: this.currentUser?.uid,
+            isGuest: this.isGuestUser,
+            isAuthenticated: this.isAuthenticated()
+        };
     }
 
     /**
      * Get user display name
-     * @returns {string}
+     * @returns {string} - Display name
      */
     getUserDisplayName() {
-        if (this.currentUser) {
-            return this.currentUser.displayName || this.currentUser.email;
-        }
-        return 'Guest';
+        if (this.isGuestUser) return 'Guest User';
+        return this.profile.name || this.currentUser?.displayName || this.currentUser?.email || 'User';
     }
 
     /**
      * Get user email
-     * @returns {string|null}
+     * @returns {string} - User email
      */
     getUserEmail() {
-        return this.currentUser ? this.currentUser.email : null;
+        if (this.isGuestUser) return 'guest@local.com';
+        return this.currentUser?.email || '';
+    }
+
+    /**
+     * Get authentication error message
+     * @param {string} errorCode - Firebase error code
+     * @returns {string} - User-friendly error message
+     */
+    getAuthErrorMessage(errorCode) {
+        const errorMessages = {
+            'auth/user-not-found': 'No account found with this email address.',
+            'auth/wrong-password': 'Invalid password.',
+            'auth/email-already-in-use': 'An account with this email already exists.',
+            'auth/weak-password': 'Password should be at least 6 characters.',
+            'auth/invalid-email': 'Invalid email address.',
+            'auth/network-request-failed': 'Network error. Please check your connection.',
+            'auth/too-many-requests': 'Too many failed login attempts. Please try again later.',
+            'auth/user-disabled': 'This account has been disabled.',
+            'auth/operation-not-allowed': 'This operation is not allowed.',
+            'auth/invalid-credential': 'Invalid credentials provided.',
+            'auth/user-token-expired': 'Your session has expired. Please login again.',
+            'auth/requires-recent-login': 'Please login again to perform this action.'
+        };
+
+        return errorMessages[errorCode] || 'An error occurred during authentication.';
+    }
+
+    /**
+     * Update user profile
+     * @param {Object} profileData - Profile data to update
+     * @returns {Promise} - Update result
+     */
+    async updateUserProfile(profileData) {
+        if (!this.currentUser || this.isGuestUser) {
+            throw new Error('User not authenticated');
+        }
+
+        try {
+            const auth = this.firebaseConfig.getAuth();
+            const db = this.firebaseConfig.getDatabase();
+            const { updateProfile } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+            const { doc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+            // Update Firebase Auth profile
+            if (profileData.displayName) {
+                await updateProfile(this.currentUser, {
+                    displayName: profileData.displayName
+                });
+            }
+
+            // Update Firestore document
+            const updateData = {
+                ...profileData,
+                updatedAt: serverTimestamp()
+            };
+            
+            await updateDoc(doc(db, 'users', this.currentUser.uid), updateData);
+            
+            // Update local profile
+            this.profile = { ...this.profile, ...profileData };
+            
+            return true;
+        } catch (error) {
+            console.error('Error updating user profile:', error);
+            throw error;
+        }
     }
 
     /**
      * Get user ID
-     * @returns {string|null}
+     * @returns {string|null} - User ID
      */
     getUserId() {
-        return this.currentUser ? this.currentUser.uid : null;
+        return this.currentUser?.uid || null;
     }
 
     /**
-     * Set up authentication state change listener
-     * @param {Function} callback - Callback function
-     * @returns {Function|null} - Unsubscribe function
+     * Check if user has specific permission
+     * @param {string} permission - Permission to check
+     * @returns {boolean} - Whether user has permission
      */
-    onAuthStateChanged(callback) {
-        if (this.firebaseConfig.isInitialized()) {
-            const auth = this.firebaseConfig.getAuth();
-            return auth.onAuthStateChanged((user) => {
-                this.currentUser = user;
-                if (!user) {
-                    this.isGuestMode = false;
-                }
-                callback(user);
-            });
+    hasPermission(permission) {
+        // Basic permission system - can be extended
+        if (this.isGuestUser) {
+            const guestPermissions = ['read', 'create', 'update'];
+            return guestPermissions.includes(permission);
         }
-        return null;
+        
+        // Authenticated users have all permissions by default
+        return true;
     }
 
     /**
-     * Get human-readable error message from Firebase error code
-     * @param {string} errorCode - Firebase error code
-     * @returns {string} - Human-readable error message
+     * Reset password
+     * @param {string} email - Email to send reset link to
+     * @returns {Promise} - Reset result
      */
-    getAuthErrorMessage(errorCode) {
-        switch (errorCode) {
-            case 'auth/user-not-found':
-                return 'No account found with this email address';
-            case 'auth/wrong-password':
-                return 'Invalid password';
-            case 'auth/email-already-in-use':
-                return 'An account with this email already exists';
-            case 'auth/weak-password':
-                return 'Password should be at least 6 characters';
-            case 'auth/invalid-email':
-                return 'Invalid email address';
-            case 'auth/network-request-failed':
-                return 'Network error. Please check your connection';
-            case 'auth/too-many-requests':
-                return 'Too many failed attempts. Please try again later';
-            case 'auth/user-disabled':
-                return 'This account has been disabled';
-            case 'auth/operation-not-allowed':
-                return 'Operation not allowed. Please contact support';
-            default:
-                return 'An error occurred. Please try again';
+    async resetPassword(email) {
+        if (!this.firebaseConfig || !this.firebaseConfig.isInitialized()) {
+            throw new Error('Firebase not initialized');
+        }
+
+        const auth = this.firebaseConfig.getAuth();
+        const { sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+        
+        await sendPasswordResetEmail(auth, email);
+        return true;
+    }
+
+    /**
+     * Delete user account
+     * @returns {Promise} - Deletion result
+     */
+    async deleteAccount() {
+        if (!this.currentUser || this.isGuestUser) {
+            throw new Error('No authenticated user to delete');
+        }
+
+        try {
+            const db = this.firebaseConfig.getDatabase();
+            const { deleteDoc, doc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            const { deleteUser } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+
+            // Delete user document from Firestore
+            await deleteDoc(doc(db, 'users', this.currentUser.uid));
+            
+            // Delete Firebase Auth user
+            await deleteUser(this.currentUser);
+            
+            // Clear local state
+            this.currentUser = null;
+            this.isGuestUser = false;
+            this.profile = {};
+            
+            return true;
+        } catch (error) {
+            console.error('Error deleting user account:', error);
+            throw error;
         }
     }
 
     /**
-     * Get user profile information
-     * @returns {Object} - User profile data
+     * Get user statistics
+     * @returns {Object} - User statistics
      */
-    getUserProfile() {
-        if (!this.currentUser) {
-            return {
-                isAuthenticated: false,
-                isGuest: this.isGuestMode,
-                displayName: 'Guest',
-                email: null,
-                uid: null
-            };
-        }
-
+    getUserStats() {
         return {
-            isAuthenticated: true,
-            isGuest: false,
-            displayName: this.currentUser.displayName,
-            email: this.currentUser.email,
-            uid: this.currentUser.uid,
-            emailVerified: this.currentUser.emailVerified,
-            photoURL: this.currentUser.photoURL,
-            creationTime: this.currentUser.metadata?.creationTime,
-            lastSignInTime: this.currentUser.metadata?.lastSignInTime
+            userId: this.getUserId(),
+            email: this.getUserEmail(),
+            displayName: this.getUserDisplayName(),
+            isGuest: this.isGuestUser,
+            isAuthenticated: this.isAuthenticated(),
+            accountCreated: this.profile.createdAt,
+            lastLogin: new Date().toISOString(),
+            permissions: ['read', 'create', 'update', 'delete']
         };
     }
 }

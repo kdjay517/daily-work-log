@@ -1,221 +1,267 @@
 // services/DataService.js
-// Data Service for handling local and cloud storage
+// Data Service Class - Handles all data operations, storage, and synchronization
 
 class DataService {
     constructor(firebaseConfig, user) {
         this.firebaseConfig = firebaseConfig;
         this.user = user;
-        this.workLogData = {};
+        this.workLogData = {}; // Format: { 'YYYY-MM-DD': [entries] }
         this.projects = [];
-        this.syncInProgress = false;
+        this.syncStatus = 'idle'; // idle, syncing, synced, error
         this.lastSyncTime = null;
+        this.pendingChanges = false;
+        this.isOnline = navigator.onLine;
+        
+        // Set up network listeners
+        this.setupNetworkListeners();
     }
 
     /**
-     * Load data based on user authentication state
-     * @returns {Promise<boolean>} - Success status
+     * Setup network connectivity listeners
+     */
+    setupNetworkListeners() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            this.handleNetworkChange(true);
+        });
+        
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+            this.handleNetworkChange(false);
+        });
+    }
+
+    /**
+     * Handle network connectivity changes
+     * @param {boolean} isOnline - Whether device is online
+     */
+    async handleNetworkChange(isOnline) {
+        if (isOnline && this.pendingChanges && this.user.isAuthenticated()) {
+            try {
+                await this.syncToCloud();
+            } catch (error) {
+                console.error('Auto-sync after network reconnection failed:', error);
+            }
+        }
+    }
+
+    /**
+     * Load all data (from cloud if authenticated, otherwise local)
+     * @returns {Promise} - Load result
      */
     async loadData() {
-        if (this.user.isAuthenticated() && !this.user.isGuest() && this.firebaseConfig.isInitialized()) {
-            try {
-                const success = await this.loadFromCloud();
-                this.lastSyncTime = new Date();
-                return success;
-            } catch (error) {
-                console.error('Error loading from cloud:', error);
+        try {
+            if (this.user.isAuthenticated() && !this.user.isGuest()) {
+                await this.loadFromCloud();
+            } else {
                 this.loadFromLocal();
-                throw new Error('Error loading cloud data, using local data');
             }
-        } else {
+            
+            this.dispatchDataEvent('loaded');
+            return { success: true, message: 'Data loaded successfully' };
+        } catch (error) {
+            console.error('Error loading data:', error);
+            // Fallback to local data
             this.loadFromLocal();
-            return true;
+            this.dispatchDataEvent('loaded');
+            return { success: false, message: 'Loaded local data after cloud error' };
         }
     }
 
     /**
-     * Load data from Firestore cloud storage
-     * @returns {Promise<boolean>} - Success status
+     * Load data from cloud (Firestore)
+     * @returns {Promise} - Load result
      */
     async loadFromCloud() {
-        const db = this.firebaseConfig.getDatabase();
-        const userId = this.user.getUserId();
-        
-        if (!db || !userId) {
-            throw new Error('Database or user not available');
+        if (!this.firebaseConfig || !this.firebaseConfig.isInitialized() || !this.user.isAuthenticated()) {
+            throw new Error('Firebase not initialized or user not authenticated');
         }
 
-        const docRef = db.collection('workLogs').doc(userId);
-        const docSnapshot = await docRef.get();
-        
-        if (docSnapshot.exists) {
-            const cloudData = docSnapshot.data();
-            console.log('Cloud data loaded successfully:', Object.keys(cloudData));
+        this.setSyncStatus('syncing');
+
+        try {
+            const db = this.firebaseConfig.getDatabase();
+            const { collection, query, where, orderBy, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+            // Load work log data
+            const workLogQuery = query(
+                collection(db, 'workLogs'),
+                where('userId', '==', this.user.getCurrentUser().uid),
+                orderBy('date', 'desc')
+            );
             
-            // Load work log entries
-            if (cloudData.entries) {
-                this.workLogData = cloudData.entries;
-                console.log(`Loaded ${Object.keys(this.workLogData).length} days of entries`);
-            } else {
-                this.workLogData = {};
-            }
-            
-            // Load projects
-            if (cloudData.projects && Array.isArray(cloudData.projects)) {
-                this.projects = cloudData.projects;
-                console.log(`Loaded ${this.projects.length} projects`);
-            } else {
-                // Initialize with default projects if none exist
-                const Project = (await import('../models/Project.js')).default;
-                this.projects = Project.getDefaultProjects().map(p => p.toObject());
-            }
-            
-            this.lastSyncTime = cloudData.lastUpdated ? cloudData.lastUpdated.toDate() : new Date();
-            return true;
-        } else {
-            console.log('No cloud data found, initializing...');
-            // Initialize with default data
-            const Project = (await import('../models/Project.js')).default;
-            this.projects = Project.getDefaultProjects().map(p => p.toObject());
+            const workLogSnapshot = await getDocs(workLogQuery);
             this.workLogData = {};
             
-            // Save initial data to cloud
-            await this.saveToCloud();
-            return false;
+            workLogSnapshot.forEach(doc => {
+                const data = doc.data();
+                if (!this.workLogData[data.date]) {
+                    this.workLogData[data.date] = [];
+                }
+                this.workLogData[data.date].push({
+                    ...data,
+                    id: doc.id
+                });
+            });
+
+            // Load projects
+            const projectsQuery = query(
+                collection(db, 'projects'),
+                where('userId', '==', this.user.getCurrentUser().uid),
+                orderBy('usageCount', 'desc')
+            );
+            
+            const projectsSnapshot = await getDocs(projectsQuery);
+            this.projects = [];
+            
+            projectsSnapshot.forEach(doc => {
+                this.projects.push({
+                    ...doc.data(),
+                    id: doc.id
+                });
+            });
+
+            // If no projects exist, load defaults
+            if (this.projects.length === 0) {
+                this.projects = this.getDefaultProjects();
+                await this.saveProjects(); // Save default projects to cloud
+            }
+
+            this.setSyncStatus('synced');
+            this.lastSyncTime = new Date();
+            this.pendingChanges = false;
+            
+            return { success: true, message: 'Data loaded from cloud' };
+        } catch (error) {
+            this.setSyncStatus('error');
+            throw error;
         }
     }
 
     /**
-     * Load data from localStorage
+     * Load data from local storage
      */
     loadFromLocal() {
         try {
-            const savedData = localStorage.getItem('workLogData');
-            const savedProjects = localStorage.getItem('projectData');
-            
-            if (savedData) {
-                this.workLogData = JSON.parse(savedData);
-                console.log('Loaded local work log data');
+            // Load work log data
+            const savedWorkLog = localStorage.getItem('workLogData');
+            if (savedWorkLog) {
+                this.workLogData = JSON.parse(savedWorkLog);
             } else {
                 this.workLogData = {};
             }
-            
+
+            // Load projects
+            const savedProjects = localStorage.getItem('projectData');
             if (savedProjects) {
                 this.projects = JSON.parse(savedProjects);
-                console.log('Loaded local project data');
             } else {
-                // Initialize with default projects
-                this.initializeDefaultProjects();
+                this.projects = this.getDefaultProjects();
+                this.saveToLocal(); // Save default projects locally
             }
+
+            this.setSyncStatus('local');
+            console.log('Data loaded from local storage');
         } catch (error) {
-            console.error('Error loading from local storage:', error);
+            console.error('Error loading local data:', error);
             this.workLogData = {};
-            this.initializeDefaultProjects();
+            this.projects = this.getDefaultProjects();
         }
     }
 
     /**
-     * Initialize default projects
-     */
-    async initializeDefaultProjects() {
-        try {
-            const Project = (await import('../models/Project.js')).default;
-            this.projects = Project.getDefaultProjects().map(p => p.toObject());
-        } catch (error) {
-            console.error('Error initializing default projects:', error);
-            this.projects = [];
-        }
-    }
-
-    /**
-     * Save data to both local and cloud storage
-     * @returns {Promise<Object>} - Save result
+     * Save all data (to cloud if authenticated, otherwise local)
+     * @returns {Promise} - Save result
      */
     async saveData() {
-        // Always save locally first for data safety
-        this.saveToLocal();
+        this.saveToLocal(); // Always save locally first
         
-        if (this.user.isAuthenticated() && !this.user.isGuest() && this.firebaseConfig.isInitialized()) {
+        if (this.user.isAuthenticated() && !this.user.isGuest() && this.isOnline) {
             try {
-                await this.saveToCloud();
-                this.lastSyncTime = new Date();
-                return { 
-                    success: true, 
-                    message: '✅ Saved and synced to cloud',
-                    syncTime: this.lastSyncTime
-                };
+                await this.syncToCloud();
+                return { success: true, message: 'Data saved and synced to cloud' };
             } catch (error) {
-                console.error('Error saving to cloud:', error);
-                return { 
-                    success: false, 
-                    message: '⚠️ Saved locally (Cloud sync failed - will retry)',
-                    error: error.message
-                };
+                console.error('Cloud sync failed:', error);
+                this.pendingChanges = true;
+                return { success: false, message: 'Saved locally, cloud sync failed' };
             }
         } else {
-            const message = this.user.isGuest() ? 
-                '💾 Saved locally (Guest mode)' : 
-                '💾 Saved locally';
-            return { success: true, message };
+            this.pendingChanges = true;
+            return { success: true, message: 'Data saved locally' };
         }
     }
 
     /**
-     * Save data to Firestore cloud storage
-     * @returns {Promise<void>}
-     */
-    async saveToCloud() {
-        if (this.syncInProgress) {
-            console.log('Sync already in progress, skipping...');
-            return;
-        }
-
-        this.syncInProgress = true;
-        
-        try {
-            const db = this.firebaseConfig.getDatabase();
-            const userId = this.user.getUserId();
-            
-            if (!db || !userId) {
-                throw new Error('Database or user not available');
-            }
-
-            const docRef = db.collection('workLogs').doc(userId);
-            const saveData = {
-                entries: this.workLogData,
-                projects: this.projects,
-                lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-                userEmail: this.user.getUserEmail(),
-                version: '1.0',
-                entryCount: this.getTotalEntries(),
-                projectCount: this.projects.length
-            };
-
-            await docRef.set(saveData);
-            console.log('Data saved to cloud successfully');
-        } finally {
-            this.syncInProgress = false;
-        }
-    }
-
-    /**
-     * Save data to localStorage
+     * Save data to local storage
      */
     saveToLocal() {
         try {
             localStorage.setItem('workLogData', JSON.stringify(this.workLogData));
             localStorage.setItem('projectData', JSON.stringify(this.projects));
             localStorage.setItem('lastLocalSave', new Date().toISOString());
-            console.log('Data saved to local storage');
         } catch (error) {
             console.error('Error saving to local storage:', error);
-            if (error.name === 'QuotaExceededError') {
-                throw new Error('Local storage quota exceeded. Please clear some data.');
-            }
         }
     }
 
     /**
-     * Get all work log data
+     * Sync data to cloud (Firestore)
+     * @returns {Promise} - Sync result
+     */
+    async syncToCloud() {
+        if (!this.firebaseConfig || !this.firebaseConfig.isInitialized() || !this.user.isAuthenticated()) {
+            throw new Error('Cannot sync - Firebase not initialized or user not authenticated');
+        }
+
+        this.setSyncStatus('syncing');
+
+        try {
+            const db = this.firebaseConfig.getDatabase();
+            const { doc, setDoc, collection, writeBatch, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            
+            const batch = writeBatch(db);
+            const userId = this.user.getCurrentUser().uid;
+
+            // Sync work log data
+            Object.keys(this.workLogData).forEach(dateKey => {
+                const entries = this.workLogData[dateKey];
+                entries.forEach(entry => {
+                    const docRef = doc(collection(db, 'workLogs'));
+                    batch.set(docRef, {
+                        ...entry,
+                        userId: userId,
+                        date: dateKey,
+                        updatedAt: serverTimestamp()
+                    });
+                });
+            });
+
+            // Sync projects
+            this.projects.forEach(project => {
+                const docRef = doc(collection(db, 'projects'));
+                batch.set(docRef, {
+                    ...project,
+                    userId: userId,
+                    updatedAt: serverTimestamp()
+                });
+            });
+
+            await batch.commit();
+            
+            this.setSyncStatus('synced');
+            this.lastSyncTime = new Date();
+            this.pendingChanges = false;
+            
+            this.dispatchDataEvent('synced');
+            return { success: true, message: 'Data synced to cloud' };
+        } catch (error) {
+            this.setSyncStatus('error');
+            throw error;
+        }
+    }
+
+    /**
+     * Get work log data
      * @returns {Object} - Work log data
      */
     getWorkLogData() {
@@ -225,86 +271,109 @@ class DataService {
     /**
      * Get entries for a specific date
      * @param {string} dateKey - Date key (YYYY-MM-DD)
-     * @returns {Array} - Array of entries
+     * @returns {Array} - Array of entries for the date
      */
     getEntriesForDate(dateKey) {
         return this.workLogData[dateKey] || [];
     }
 
     /**
-     * Add entry to a specific date
-     * @param {string} dateKey - Date key
-     * @param {Object} entry - Entry object
+     * Add entry for a date
+     * @param {string} dateKey - Date key (YYYY-MM-DD)
+     * @param {Object} entryData - Entry data
+     * @returns {Promise} - Add result
      */
-    addEntry(dateKey, entry) {
+    async addEntry(dateKey, entryData) {
         if (!this.workLogData[dateKey]) {
             this.workLogData[dateKey] = [];
         }
-        this.workLogData[dateKey].push(entry);
 
-        // Update project usage count if it's a work entry
+        const entry = {
+            id: this.generateId(),
+            ...entryData,
+            timestamp: new Date().toISOString()
+        };
+
+        this.workLogData[dateKey].push(entry);
+        
+        // Update project usage if it's a work entry
         if (entry.type === 'work' && entry.project) {
             this.incrementProjectUsage(entry.project);
         }
+
+        this.dispatchDataEvent('entryAdded', { dateKey, entry });
+        return await this.saveData();
     }
 
     /**
-     * Update existing entry
-     * @param {string} dateKey - Date key
+     * Update entry
+     * @param {string} dateKey - Date key (YYYY-MM-DD)
      * @param {string} entryId - Entry ID
-     * @param {Object} updatedEntry - Updated entry object
-     * @returns {boolean} - Success status
+     * @param {Object} updateData - Data to update
+     * @returns {Promise} - Update result
      */
-    updateEntry(dateKey, entryId, updatedEntry) {
-        const entries = this.workLogData[dateKey] || [];
-        const index = entries.findIndex(entry => entry.id === entryId);
-        
-        if (index !== -1) {
-            const oldEntry = entries[index];
-            
-            // Update project usage counts
-            if (oldEntry.type === 'work' && oldEntry.project) {
-                this.decrementProjectUsage(oldEntry.project);
-            }
-            if (updatedEntry.type === 'work' && updatedEntry.project) {
-                this.incrementProjectUsage(updatedEntry.project);
-            }
-            
-            entries[index] = updatedEntry;
-            return true;
+    async updateEntry(dateKey, entryId, updateData) {
+        if (!this.workLogData[dateKey]) {
+            throw new Error('No entries found for this date');
         }
-        return false;
+
+        const entryIndex = this.workLogData[dateKey].findIndex(entry => entry.id === entryId);
+        if (entryIndex === -1) {
+            throw new Error('Entry not found');
+        }
+
+        const oldEntry = this.workLogData[dateKey][entryIndex];
+        const updatedEntry = {
+            ...oldEntry,
+            ...updateData,
+            timestamp: new Date().toISOString()
+        };
+
+        this.workLogData[dateKey][entryIndex] = updatedEntry;
+
+        // Update project usage counts
+        if (oldEntry.type === 'work' && oldEntry.project && oldEntry.project !== updatedEntry.project) {
+            this.decrementProjectUsage(oldEntry.project);
+        }
+        if (updatedEntry.type === 'work' && updatedEntry.project) {
+            this.incrementProjectUsage(updatedEntry.project);
+        }
+
+        this.dispatchDataEvent('entryUpdated', { dateKey, entryId, entry: updatedEntry });
+        return await this.saveData();
     }
 
     /**
-     * Delete entry from a specific date
-     * @param {string} dateKey - Date key
+     * Delete entry
+     * @param {string} dateKey - Date key (YYYY-MM-DD)
      * @param {string} entryId - Entry ID
-     * @returns {boolean} - Success status
+     * @returns {Promise} - Delete result
      */
-    deleteEntry(dateKey, entryId) {
-        if (this.workLogData[dateKey]) {
-            const entries = this.workLogData[dateKey];
-            const entryIndex = entries.findIndex(entry => entry.id === entryId);
-            
-            if (entryIndex !== -1) {
-                const deletedEntry = entries[entryIndex];
-                
-                // Update project usage count
-                if (deletedEntry.type === 'work' && deletedEntry.project) {
-                    this.decrementProjectUsage(deletedEntry.project);
-                }
-                
-                this.workLogData[dateKey] = entries.filter(entry => entry.id !== entryId);
-                
-                // Clean up empty date entries
-                if (this.workLogData[dateKey].length === 0) {
-                    delete this.workLogData[dateKey];
-                }
-                return true;
-            }
+    async deleteEntry(dateKey, entryId) {
+        if (!this.workLogData[dateKey]) {
+            throw new Error('No entries found for this date');
         }
-        return false;
+
+        const entryIndex = this.workLogData[dateKey].findIndex(entry => entry.id === entryId);
+        if (entryIndex === -1) {
+            throw new Error('Entry not found');
+        }
+
+        const deletedEntry = this.workLogData[dateKey][entryIndex];
+        this.workLogData[dateKey].splice(entryIndex, 1);
+
+        // Clean up empty date arrays
+        if (this.workLogData[dateKey].length === 0) {
+            delete this.workLogData[dateKey];
+        }
+
+        // Update project usage
+        if (deletedEntry.type === 'work' && deletedEntry.project) {
+            this.decrementProjectUsage(deletedEntry.project);
+        }
+
+        this.dispatchDataEvent('entryDeleted', { dateKey, entryId, entry: deletedEntry });
+        return await this.saveData();
     }
 
     /**
@@ -316,151 +385,233 @@ class DataService {
     }
 
     /**
-     * Set projects array
-     * @param {Array} projects - Projects array
-     */
-    setProjects(projects) {
-        this.projects = projects;
-    }
-
-    /**
      * Add new project
-     * @param {Object} project - Project object
+     * @param {Object} projectData - Project data
+     * @returns {Promise} - Add result
      */
-    addProject(project) {
+    async addProject(projectData) {
+        // Check for duplicates
+        const existing = this.findProjectByValue(`${projectData.projectId}-${projectData.subCode}`);
+        if (existing) {
+            throw new Error('Project with this ID and sub code already exists');
+        }
+
+        const project = {
+            id: this.generateId(),
+            ...projectData,
+            usageCount: 0,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
         this.projects.push(project);
+        this.dispatchDataEvent('projectAdded', { project });
+        return await this.saveData();
     }
 
     /**
-     * Update existing project
+     * Update project
      * @param {string} projectId - Project ID
-     * @param {Object} updatedProject - Updated project object
-     * @returns {boolean} - Success status
+     * @param {Object} updateData - Data to update
+     * @returns {Promise} - Update result
      */
-    updateProject(projectId, updatedProject) {
-        const index = this.projects.findIndex(p => p.id === projectId);
-        if (index !== -1) {
-            this.projects[index] = updatedProject;
-            return true;
+    async updateProject(projectId, updateData) {
+        const projectIndex = this.projects.findIndex(p => p.id === projectId);
+        if (projectIndex === -1) {
+            throw new Error('Project not found');
         }
-        return false;
+
+        const updatedProject = {
+            ...this.projects[projectIndex],
+            ...updateData,
+            updatedAt: new Date().toISOString()
+        };
+
+        this.projects[projectIndex] = updatedProject;
+        this.dispatchDataEvent('projectUpdated', { projectId, project: updatedProject });
+        return await this.saveData();
     }
 
     /**
      * Delete project
      * @param {string} projectId - Project ID
-     * @returns {boolean} - Success status
+     * @returns {Promise} - Delete result
      */
-    deleteProject(projectId) {
-        const isUsed = this.isProjectInUse(projectId);
-        if (isUsed) {
-            throw new Error('Cannot delete project that is used in entries');
+    async deleteProject(projectId) {
+        const projectIndex = this.projects.findIndex(p => p.id === projectId);
+        if (projectIndex === -1) {
+            throw new Error('Project not found');
         }
-        
-        const index = this.projects.findIndex(p => p.id === projectId);
-        if (index !== -1) {
-            this.projects.splice(index, 1);
-            return true;
-        }
-        return false;
-    }
 
-    /**
-     * Find project by ID
-     * @param {string} projectId - Project ID
-     * @returns {Object|null} - Project object or null
-     */
-    findProject(projectId) {
-        return this.projects.find(p => p.id === projectId) || null;
+        const project = this.projects[projectIndex];
+        
+        // Check if project is used in entries
+        const isUsed = Object.values(this.workLogData).some(entries =>
+            entries.some(entry => entry.project === `${project.projectId}-${project.subCode}`)
+        );
+
+        if (isUsed) {
+            throw new Error('Cannot delete project that is used in work entries');
+        }
+
+        this.projects.splice(projectIndex, 1);
+        this.dispatchDataEvent('projectDeleted', { projectId, project });
+        return await this.saveData();
     }
 
     /**
      * Find project by value (projectId-subCode)
-     * @param {string} value - Project value
+     * @param {string} projectValue - Project value
      * @returns {Object|null} - Project object or null
      */
-    findProjectByValue(value) {
-        return this.projects.find(p => {
-            const projectValue = `${p.projectId}-${p.subCode}`;
-            return projectValue === value;
-        }) || null;
-    }
-
-    /**
-     * Check if project is used in any entries
-     * @param {string} projectId - Project ID
-     * @returns {boolean} - Usage status
-     */
-    isProjectInUse(projectId) {
-        const project = this.findProject(projectId);
-        if (!project) return false;
+    findProjectByValue(projectValue) {
+        if (!projectValue) return null;
         
-        const projectValue = `${project.projectId}-${project.subCode}`;
-        
-        return Object.values(this.workLogData).some(entries =>
-            entries.some(entry => entry.project === projectValue)
-        );
+        return this.projects.find(project => 
+            `${project.projectId}-${project.subCode}` === projectValue
+        ) || null;
     }
 
     /**
      * Increment project usage count
-     * @param {string} projectValue - Project value (projectId-subCode)
+     * @param {string} projectValue - Project value
      */
     incrementProjectUsage(projectValue) {
         const project = this.findProjectByValue(projectValue);
         if (project) {
             project.usageCount = (project.usageCount || 0) + 1;
+            project.updatedAt = new Date().toISOString();
         }
     }
 
     /**
      * Decrement project usage count
-     * @param {string} projectValue - Project value (projectId-subCode)
+     * @param {string} projectValue - Project value
      */
     decrementProjectUsage(projectValue) {
         const project = this.findProjectByValue(projectValue);
         if (project && project.usageCount > 0) {
             project.usageCount--;
+            project.updatedAt = new Date().toISOString();
         }
     }
 
     /**
-     * Get all dates with entries
-     * @returns {Array} - Sorted array of date keys
+     * Get default projects
+     * @returns {Array} - Default projects array
      */
-    getAllDatesWithEntries() {
-        return Object.keys(this.workLogData).sort();
-    }
-
-    /**
-     * Get total number of entries
-     * @returns {number} - Total entry count
-     */
-    getTotalEntries() {
-        return Object.values(this.workLogData).reduce(
-            (total, entries) => total + entries.length, 0
-        );
-    }
-
-    /**
-     * Get entries for date range
-     * @param {string} startDate - Start date (YYYY-MM-DD)
-     * @param {string} endDate - End date (YYYY-MM-DD)
-     * @returns {Object} - Entries grouped by date
-     */
-    getEntriesForDateRange(startDate, endDate) {
-        const result = {};
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        
-        Object.keys(this.workLogData).forEach(dateKey => {
-            const date = new Date(dateKey);
-            if (date >= start && date <= end) {
-                result[dateKey] = this.workLogData[dateKey];
+    getDefaultProjects() {
+        return [
+            {
+                id: 'default_1',
+                projectId: 'IN-1100-NA',
+                subCode: '0010',
+                projectTitle: 'General Overhead',
+                category: 'Overhead',
+                isActive: true,
+                usageCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'default_2',
+                projectId: 'WV-1112-4152',
+                subCode: '0210',
+                projectTitle: 'ASStrategy',
+                category: 'Strategy',
+                isActive: true,
+                usageCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'default_3',
+                projectId: 'WV-1112-4152',
+                subCode: '1010',
+                projectTitle: 'ASStrategy Development',
+                category: 'Development',
+                isActive: true,
+                usageCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'default_4',
+                projectId: 'RW-1173-9573P00303',
+                subCode: '0010',
+                projectTitle: 'RW Tracking',
+                category: 'Tracking',
+                isActive: true,
+                usageCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'default_5',
+                projectId: 'WV-1137-D75B1-C4285-08-03',
+                subCode: '1250',
+                projectTitle: 'MERCIA INSIGNIA Electronic Controller',
+                category: 'Controller',
+                isActive: true,
+                usageCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             }
-        });
-        
-        return result;
+        ];
+    }
+
+    /**
+     * Import data from backup
+     * @param {Object} workLogData - Work log data
+     * @param {Object} projectData - Project data
+     * @returns {Promise} - Import result
+     */
+    async importData(workLogData, projectData) {
+        try {
+            // Backup current data
+            const currentWorkLog = { ...this.workLogData };
+            const currentProjects = [...this.projects];
+
+            // Import new data
+            this.workLogData = workLogData || {};
+            this.projects = projectData || [];
+
+            // Save imported data
+            const result = await this.saveData();
+            
+            this.dispatchDataEvent('imported', { 
+                workLogEntries: Object.keys(this.workLogData).length,
+                projects: this.projects.length 
+            });
+
+            return {
+                success: true,
+                message: `Imported ${Object.keys(this.workLogData).length} work log entries and ${this.projects.length} projects`,
+                backup: { workLogData: currentWorkLog, projectData: currentProjects }
+            };
+        } catch (error) {
+            console.error('Import failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Export all data
+     * @returns {Object} - Exported data
+     */
+    exportData() {
+        return {
+            workLogData: this.workLogData,
+            projectData: this.projects,
+            exportDate: new Date().toISOString(),
+            version: '2.1',
+            userInfo: {
+                userId: this.user.getUserId(),
+                email: this.user.getUserEmail(),
+                isGuest: this.user.isGuest()
+            }
+        };
     }
 
     /**
@@ -469,67 +620,90 @@ class DataService {
     clearData() {
         this.workLogData = {};
         this.projects = [];
-        this.lastSyncTime = null;
-        
-        // Clear local storage
-        localStorage.removeItem('workLogData');
-        localStorage.removeItem('projectData');
-        localStorage.removeItem('lastLocalSave');
-        
-        console.log('All data cleared');
+        this.saveToLocal();
+        this.dispatchDataEvent('cleared');
     }
 
     /**
-     * Export complete data
-     * @returns {Object} - Complete data export
+     * Get sync status
+     * @returns {Object} - Sync status information
      */
-    exportData() {
+    getSyncStatus() {
         return {
-            workLogData: this.workLogData,
-            projects: this.projects,
-            exportDate: new Date().toISOString(),
-            totalEntries: this.getTotalEntries(),
-            totalProjects: this.projects.length,
-            dateRange: this.getDateRange(),
+            status: this.syncStatus,
             lastSyncTime: this.lastSyncTime,
-            userInfo: {
-                userId: this.user.getUserId(),
-                email: this.user.getUserEmail(),
-                displayName: this.user.getUserDisplayName(),
-                isGuest: this.user.isGuest()
-            }
+            pendingChanges: this.pendingChanges,
+            isOnline: this.isOnline,
+            isAuthenticated: this.user.isAuthenticated(),
+            isGuest: this.user.isGuest()
         };
     }
 
     /**
-     * Import data from export
-     * @param {Object} data - Imported data
-     * @returns {boolean} - Success status
+     * Set sync status
+     * @param {string} status - New sync status
      */
-    importData(data) {
-        try {
-            if (data.workLogData) {
-                this.workLogData = data.workLogData;
-            }
-            if (data.projects && Array.isArray(data.projects)) {
-                this.projects = data.projects;
-            }
-            return true;
-        } catch (error) {
-            console.error('Error importing data:', error);
-            return false;
-        }
+    setSyncStatus(status) {
+        this.syncStatus = status;
+        this.dispatchDataEvent('syncStatusChanged', { status });
     }
 
     /**
-     * Get date range of entries
+     * Generate unique ID
+     * @returns {string} - Unique ID
+     */
+    generateId() {
+        return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * Dispatch data-related events
+     * @param {string} eventName - Event name
+     * @param {*} data - Event data
+     */
+    dispatchDataEvent(eventName, data) {
+        const event = new CustomEvent(`data:${eventName}`, {
+            detail: data,
+            bubbles: true
+        });
+        document.dispatchEvent(event);
+    }
+
+    /**
+     * Get data statistics
+     * @returns {Object} - Data statistics
+     */
+    getDataStats() {
+        const totalEntries = Object.values(this.workLogData).reduce((sum, entries) => sum + entries.length, 0);
+        const totalWorkDays = Object.keys(this.workLogData).filter(dateKey => 
+            this.workLogData[dateKey].some(entry => entry.type === 'work')
+        ).length;
+        
+        const totalHours = Object.values(this.workLogData).reduce((sum, entries) => {
+            return sum + entries.reduce((daySum, entry) => {
+                if (entry.type === 'work') return daySum + (entry.hours || 0);
+                return daySum;
+            }, 0);
+        }, 0);
+
+        return {
+            totalEntries,
+            totalWorkDays,
+            totalHours,
+            activeProjects: this.projects.filter(p => p.isActive).length,
+            totalProjects: this.projects.length,
+            dateRange: this.getDateRange(),
+            syncStatus: this.getSyncStatus()
+        };
+    }
+
+    /**
+     * Get date range of data
      * @returns {Object} - Date range information
      */
     getDateRange() {
-        const dates = this.getAllDatesWithEntries();
-        if (dates.length === 0) {
-            return { earliest: null, latest: null, totalDays: 0 };
-        }
+        const dates = Object.keys(this.workLogData).sort();
+        if (dates.length === 0) return { earliest: null, latest: null, totalDays: 0 };
         
         return {
             earliest: dates[0],
@@ -539,32 +713,11 @@ class DataService {
     }
 
     /**
-     * Get sync status
-     * @returns {Object} - Sync status information
+     * Save projects specifically (useful for project management)
+     * @returns {Promise} - Save result
      */
-    getSyncStatus() {
-        return {
-            isCloudEnabled: this.user.isAuthenticated() && !this.user.isGuest() && this.firebaseConfig.isInitialized(),
-            lastSyncTime: this.lastSyncTime,
-            syncInProgress: this.syncInProgress,
-            totalEntries: this.getTotalEntries(),
-            totalProjects: this.projects.length
-        };
-    }
-
-    /**
-     * Force sync with cloud
-     * @returns {Promise<Object>} - Sync result
-     */
-    async forceSync() {
-        if (!this.user.isAuthenticated() || this.user.isGuest()) {
-            throw new Error('Sync not available for guest users');
-        }
-        
-        if (!this.firebaseConfig.isInitialized()) {
-            throw new Error('Firebase not initialized');
-        }
-        
+    async saveProjects() {
+        this.dispatchDataEvent('updated');
         return await this.saveData();
     }
 }

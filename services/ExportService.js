@@ -1,625 +1,600 @@
 // services/ExportService.js
-// Data Export and Import Service
+// Export Service Class - Handles data export operations in various formats
 
 class ExportService {
     constructor(dataService) {
         this.dataService = dataService;
+        this.supportedFormats = ['csv', 'json', 'pdf', 'excel'];
     }
 
     /**
-     * Export current month data as CSV
-     * @returns {Promise<void>}
+     * Export data in specified format
+     * @param {string} format - Export format (csv, json, pdf, excel)
+     * @param {Object} options - Export options
+     * @returns {Promise} - Export result
      */
-    async exportCurrentMonthCSV() {
-        const currentDate = new Date();
-        return this.exportMonthCSV(currentDate.getFullYear(), currentDate.getMonth());
-    }
+    async export(format, options = {}) {
+        const {
+            dateRange = 'all',
+            startDate = null,
+            endDate = null,
+            includeProjects = true,
+            includeComments = true,
+            filename = null
+        } = options;
 
-    /**
-     * Export all data as CSV
-     * @returns {Promise<void>}
-     */
-    async exportAllDataCSV() {
-        try {
-            const workLogData = this.dataService.getWorkLogData();
-            const entries = this.flattenWorkLogData(workLogData);
-            
-            if (entries.length === 0) {
-                throw new Error('No data available to export');
-            }
-            
-            const csvContent = this.convertToCSV(entries);
-            const filename = `work-log-all-data-${new Date().toISOString().split('T')[0]}.csv`;
-            
-            this.downloadFile(csvContent, filename, 'text/csv');
-            
-            return {
-                success: true,
-                message: `Exported ${entries.length} entries successfully`,
-                filename: filename
-            };
-        } catch (error) {
-            console.error('Export error:', error);
-            throw new Error(`Export failed: ${error.message}`);
+        if (!this.supportedFormats.includes(format)) {
+            throw new Error(`Unsupported export format: ${format}`);
         }
-    }
 
-    /**
-     * Export month data as CSV
-     * @param {number} year - Year to export
-     * @param {number} month - Month to export (0-11)
-     * @returns {Promise<void>}
-     */
-    async exportMonthCSV(year, month) {
         try {
-            const workLogData = this.dataService.getWorkLogData();
-            const monthEntries = [];
-            
-            Object.keys(workLogData).forEach(dateKey => {
-                const date = new Date(dateKey);
-                if (date.getFullYear() === year && date.getMonth() === month) {
-                    workLogData[dateKey].forEach(entry => {
-                        monthEntries.push({
-                            ...entry,
-                            date: dateKey,
-                            dayOfWeek: date.toLocaleDateString('en-US', { weekday: 'long' })
-                        });
-                    });
-                }
-            });
+            const data = this.prepareExportData(dateRange, startDate, endDate);
+            const exportFilename = filename || this.generateFilename(format, dateRange);
 
-            if (monthEntries.length === 0) {
-                throw new Error('No data available for the selected month');
-            }
-
-            const csvContent = this.convertToCSV(monthEntries);
-            const monthName = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            const filename = `work-log-${monthName.replace(' ', '-').toLowerCase()}.csv`;
-            
-            this.downloadFile(csvContent, filename, 'text/csv');
-            
-            return {
-                success: true,
-                message: `Exported ${monthEntries.length} entries for ${monthName}`,
-                filename: filename
-            };
-        } catch (error) {
-            console.error('Export error:', error);
-            throw new Error(`Export failed: ${error.message}`);
-        }
-    }
-
-    /**
-     * Export data backup as JSON
-     * @returns {Promise<Object>}
-     */
-    async exportDataBackup() {
-        try {
-            const backupData = {
-                version: '2.1',
-                exportDate: new Date().toISOString(),
-                workLogData: this.dataService.getWorkLogData(),
-                projectData: this.dataService.getProjects(),
-                metadata: {
-                    totalEntries: this.getTotalEntriesCount(),
-                    dateRange: this.getDateRange(),
-                    exportedBy: 'Work Log Tracker v2.1'
-                }
-            };
-
-            const jsonContent = JSON.stringify(backupData, null, 2);
-            const filename = `work-log-backup-${new Date().toISOString().split('T')[0]}.json`;
-            
-            this.downloadFile(jsonContent, filename, 'application/json');
-            
-            return {
-                success: true,
-                message: 'Data backup exported successfully',
-                filename: filename,
-                entriesCount: backupData.metadata.totalEntries
-            };
-        } catch (error) {
-            console.error('Backup export error:', error);
-            throw new Error(`Backup export failed: ${error.message}`);
-        }
-    }
-
-    /**
-     * Import data from backup file
-     * @param {File} file - Backup file
-     * @returns {Promise<Object>}
-     */
-    async importDataBackup(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            
-            reader.onload = async (e) => {
-                try {
-                    const backupData = JSON.parse(e.target.result);
-                    
-                    // Validate backup format
-                    if (!backupData.workLogData || !backupData.projectData) {
-                        throw new Error('Invalid backup file format');
-                    }
-                    
-                    // Merge or replace data based on user choice
-                    const importChoice = confirm(
-                        'How would you like to import this backup?\n\n' +
-                        'OK = Merge with existing data\n' +
-                        'Cancel = Replace all existing data'
-                    );
-                    
-                    let importedEntries = 0;
-                    let importedProjects = 0;
-                    
-                    if (importChoice) {
-                        // Merge data
-                        importedEntries = await this.mergeWorkLogData(backupData.workLogData);
-                        importedProjects = await this.mergeProjectData(backupData.projectData);
-                    } else {
-                        // Replace data
-                        await this.dataService.replaceAllData(backupData.workLogData, backupData.projectData);
-                        importedEntries = this.getTotalEntriesFromData(backupData.workLogData);
-                        importedProjects = backupData.projectData.length;
-                    }
-                    
-                    // Save the updated data
-                    await this.dataService.saveData();
-                    
-                    resolve({
-                        success: true,
-                        message: `Import completed: ${importedEntries} entries, ${importedProjects} projects`,
-                        importedEntries: importedEntries,
-                        importedProjects: importedProjects,
-                        backupDate: backupData.exportDate
-                    });
-                    
-                } catch (error) {
-                    reject(new Error(`Import failed: ${error.message}`));
-                }
-            };
-            
-            reader.onerror = () => {
-                reject(new Error('Failed to read backup file'));
-            };
-            
-            reader.readAsText(file);
-        });
-    }
-
-    /**
-     * Export custom date range as CSV
-     * @param {Date} startDate - Start date
-     * @param {Date} endDate - End date
-     * @param {string} format - Export format (csv, json, pdf)
-     * @returns {Promise<Object>}
-     */
-    async exportCustomRange(startDate, endDate, format = 'csv') {
-        try {
-            const workLogData = this.dataService.getWorkLogData();
-            const entries = [];
-            
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            
-            Object.keys(workLogData).forEach(dateKey => {
-                const date = new Date(dateKey);
-                if (date >= start && date <= end) {
-                    workLogData[dateKey].forEach(entry => {
-                        entries.push({
-                            ...entry,
-                            date: dateKey,
-                            dayOfWeek: date.toLocaleDateString('en-US', { weekday: 'long' })
-                        });
-                    });
-                }
-            });
-
-            if (entries.length === 0) {
-                throw new Error('No data available for the selected date range');
-            }
-
-            const startStr = start.toISOString().split('T')[0];
-            const endStr = end.toISOString().split('T')[0];
-            
-            let filename, content, mimeType;
-            
             switch (format) {
+                case 'csv':
+                    return await this.exportToCSV(data, exportFilename, { includeProjects, includeComments });
                 case 'json':
-                    content = JSON.stringify({
-                        dateRange: { start: startStr, end: endStr },
-                        exportDate: new Date().toISOString(),
-                        entries: entries
-                    }, null, 2);
-                    filename = `work-log-${startStr}-to-${endStr}.json`;
-                    mimeType = 'application/json';
-                    break;
-                    
+                    return await this.exportToJSON(data, exportFilename);
                 case 'pdf':
-                    // For PDF, we'll generate a formatted report
-                    content = this.generatePDFReport(entries, start, end);
-                    filename = `work-log-report-${startStr}-to-${endStr}.html`;
-                    mimeType = 'text/html';
-                    break;
-                    
-                default: // csv
-                    content = this.convertToCSV(entries);
-                    filename = `work-log-${startStr}-to-${endStr}.csv`;
-                    mimeType = 'text/csv';
-                    break;
+                    return await this.exportToPDF(data, exportFilename);
+                case 'excel':
+                    return await this.exportToExcel(data, exportFilename);
+                default:
+                    throw new Error(`Export format ${format} not implemented`);
             }
-            
-            this.downloadFile(content, filename, mimeType);
-            
-            return {
-                success: true,
-                message: `Exported ${entries.length} entries from ${startStr} to ${endStr}`,
-                filename: filename,
-                format: format
-            };
-            
         } catch (error) {
-            console.error('Custom export error:', error);
-            throw new Error(`Export failed: ${error.message}`);
+            console.error('Export failed:', error);
+            throw error;
         }
     }
 
     /**
-     * Convert work log entries to CSV format
-     * @param {Array} entries - Work log entries
-     * @returns {string} - CSV content
+     * Prepare data for export based on date range
+     * @param {string} dateRange - Date range type
+     * @param {string} startDate - Start date (YYYY-MM-DD)
+     * @param {string} endDate - End date (YYYY-MM-DD)
+     * @returns {Object} - Prepared export data
      */
-    convertToCSV(entries) {
-        const headers = [
+    prepareExportData(dateRange, startDate = null, endDate = null) {
+        const workLogData = this.dataService.getWorkLogData();
+        const projects = this.dataService.getProjects();
+        const entries = [];
+
+        let filterStartDate, filterEndDate;
+
+        switch (dateRange) {
+            case 'current-month':
+                const currentDate = new Date();
+                filterStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                filterEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                break;
+            case 'last-month':
+                const lastMonth = new Date();
+                lastMonth.setMonth(lastMonth.getMonth() - 1);
+                filterStartDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+                filterEndDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0);
+                break;
+            case 'last-3-months':
+                const threeMonthsAgo = new Date();
+                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                filterStartDate = threeMonthsAgo;
+                filterEndDate = new Date();
+                break;
+            case 'custom':
+                filterStartDate = startDate ? new Date(startDate) : null;
+                filterEndDate = endDate ? new Date(endDate) : null;
+                break;
+            case 'all':
+            default:
+                filterStartDate = null;
+                filterEndDate = null;
+        }
+
+        // Collect and filter entries
+        Object.keys(workLogData).forEach(dateKey => {
+            const entryDate = new Date(dateKey);
+            
+            // Apply date filter
+            if (filterStartDate && entryDate < filterStartDate) return;
+            if (filterEndDate && entryDate > filterEndDate) return;
+
+            workLogData[dateKey].forEach(entry => {
+                const project = this.dataService.findProjectByValue(entry.project);
+                
+                entries.push({
+                    date: dateKey,
+                    dayOfWeek: entryDate.toLocaleDateString('en-US', { weekday: 'long' }),
+                    type: this.getEntryTypeLabel(entry.type),
+                    project: project ? project.projectTitle : entry.project || 'N/A',
+                    projectId: project ? project.projectId : '',
+                    subCode: project ? project.subCode : '',
+                    category: project ? project.category : 'N/A',
+                    hours: this.getEntryHours(entry),
+                    actualHours: entry.hours || 0,
+                    halfDayPeriod: entry.halfDayPeriod || 'N/A',
+                    comments: entry.comments || '',
+                    timestamp: entry.timestamp || '',
+                    createdDate: entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : 'N/A'
+                });
+            });
+        });
+
+        // Sort by date
+        entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        return {
+            entries,
+            projects,
+            metadata: {
+                exportDate: new Date().toISOString(),
+                dateRange,
+                startDate: filterStartDate?.toISOString() || null,
+                endDate: filterEndDate?.toISOString() || null,
+                totalEntries: entries.length,
+                exportedBy: 'Daily Work Log Tracker v2.1'
+            },
+            summary: this.generateSummary(entries)
+        };
+    }
+
+    /**
+     * Export data to CSV format
+     * @param {Object} data - Export data
+     * @param {string} filename - Output filename
+     * @param {Object} options - Export options
+     * @returns {Promise} - Export result
+     */
+    async exportToCSV(data, filename, options = {}) {
+        const { includeProjects = true, includeComments = true } = options;
+        
+        // Define headers
+        let headers = [
             'Date',
             'Day of Week',
             'Entry Type',
-            'Project ID',
-            'Project Title',
-            'Hours',
-            'Half Day Period',
-            'Comments',
-            'Created Date'
+            'Project',
+            'Hours'
         ];
 
-        let csv = headers.join(',') + '\n';
+        if (includeProjects) {
+            headers.push('Project ID', 'Sub Code', 'Category');
+        }
 
-        entries.forEach(entry => {
-            const project = this.getProjectDisplayName(entry.project);
-            const createdDate = entry.timestamp ? 
-                new Date(entry.timestamp).toLocaleDateString() : 'N/A';
-            
-            const row = [
+        if (includeComments) {
+            headers.push('Comments');
+        }
+
+        headers.push('Created Date', 'Timestamp');
+
+        // Create CSV content
+        const csvRows = [headers.join(',')];
+
+        data.entries.forEach(entry => {
+            let row = [
                 entry.date,
-                entry.dayOfWeek || new Date(entry.date).toLocaleDateString('en-US', { weekday: 'long' }),
-                this.getEntryTypeLabel(entry.type),
-                this.getProjectId(entry.project),
-                this.getProjectTitle(entry.project),
-                entry.hours || this.getDefaultHours(entry.type),
-                entry.halfDayPeriod || 'N/A',
-                this.escapeCsvValue(entry.comments || ''),
-                createdDate
+                `"${entry.dayOfWeek}"`,
+                `"${entry.type}"`,
+                `"${entry.project.replace(/"/g, '""')}"`,
+                entry.hours
             ];
 
-            csv += row.map(value => `"${value}"`).join(',') + '\n';
+            if (includeProjects) {
+                row.push(
+                    `"${entry.projectId}"`,
+                    `"${entry.subCode}"`,
+                    `"${entry.category}"`
+                );
+            }
+
+            if (includeComments) {
+                row.push(`"${entry.comments.replace(/"/g, '""')}"`);
+            }
+
+            row.push(
+                `"${entry.createdDate}"`,
+                entry.timestamp
+            );
+
+            csvRows.push(row.join(','));
         });
 
-        return csv;
+        const csvContent = csvRows.join('\n');
+        this.downloadFile(csvContent, filename, 'text/csv');
+        
+        return {
+            success: true,
+            message: `CSV exported successfully: ${data.entries.length} entries`,
+            filename
+        };
     }
 
     /**
-     * Generate PDF report content
-     * @param {Array} entries - Work log entries
-     * @param {Date} startDate - Start date
-     * @param {Date} endDate - End date
-     * @returns {string} - HTML content for PDF
+     * Export data to JSON format
+     * @param {Object} data - Export data
+     * @param {string} filename - Output filename
+     * @returns {Promise} - Export result
      */
-    generatePDFReport(entries, startDate, endDate) {
-        const totalHours = entries.reduce((sum, entry) => 
-            sum + (entry.hours || this.getDefaultHours(entry.type)), 0);
-        const workDays = new Set(entries.filter(e => e.type === 'work').map(e => e.date)).size;
-        const avgHours = workDays > 0 ? (totalHours / workDays) : 0;
+    async exportToJSON(data, filename) {
+        const jsonContent = JSON.stringify(data, null, 2);
+        this.downloadFile(jsonContent, filename, 'application/json');
+        
+        return {
+            success: true,
+            message: `JSON exported successfully: ${data.entries.length} entries`,
+            filename
+        };
+    }
 
+    /**
+     * Export data to PDF format
+     * @param {Object} data - Export data
+     * @param {string} filename - Output filename
+     * @returns {Promise} - Export result
+     */
+    async exportToPDF(data, filename) {
+        // Create HTML content for PDF generation
+        const htmlContent = this.generatePDFHTML(data);
+        
+        // Use browser's print functionality to generate PDF
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.focus();
+        
+        setTimeout(() => {
+            printWindow.print();
+        }, 100);
+
+        return {
+            success: true,
+            message: `PDF generation initiated: ${data.entries.length} entries`,
+            filename
+        };
+    }
+
+    /**
+     * Export data to Excel format
+     * @param {Object} data - Export data
+     * @param {string} filename - Output filename
+     * @returns {Promise} - Export result
+     */
+    async exportToExcel(data, filename) {
+        // For Excel export, we'll create an enhanced CSV with multiple sheets worth of data
+        // This is a simplified Excel export - for true Excel format, would need a library like SheetJS
+        
+        const workbook = {
+            SheetNames: ['Work Log', 'Projects', 'Summary'],
+            Sheets: {
+                'Work Log': this.createExcelSheet(data.entries, [
+                    'Date', 'Day of Week', 'Entry Type', 'Project', 'Hours', 
+                    'Project ID', 'Sub Code', 'Category', 'Comments', 'Created Date'
+                ]),
+                'Projects': this.createExcelSheet(data.projects, [
+                    'Project ID', 'Sub Code', 'Project Title', 'Category', 
+                    'Usage Count', 'Is Active', 'Created At'
+                ]),
+                'Summary': this.createExcelSheet([data.summary], Object.keys(data.summary))
+            }
+        };
+
+        // Convert to CSV format for download (simplified Excel export)
+        const csvContent = this.convertWorkbookToCSV(workbook);
+        this.downloadFile(csvContent, filename.replace('.xlsx', '.csv'), 'text/csv');
+
+        return {
+            success: true,
+            message: `Excel-format CSV exported successfully: ${data.entries.length} entries`,
+            filename: filename.replace('.xlsx', '.csv')
+        };
+    }
+
+    /**
+     * Create Excel-like sheet from array of objects
+     * @param {Array} data - Data array
+     * @param {Array} headers - Header columns
+     * @returns {Array} - Sheet data
+     */
+    createExcelSheet(data, headers) {
+        const sheet = [headers];
+        
+        data.forEach(item => {
+            const row = headers.map(header => {
+                const key = header.toLowerCase().replace(/\s+/g, '');
+                return item[key] || item[header] || '';
+            });
+            sheet.push(row);
+        });
+        
+        return sheet;
+    }
+
+    /**
+     * Convert workbook to CSV format
+     * @param {Object} workbook - Workbook object
+     * @returns {string} - CSV content
+     */
+    convertWorkbookToCSV(workbook) {
+        let csvContent = '';
+        
+        workbook.SheetNames.forEach(sheetName => {
+            csvContent += `\n--- ${sheetName} ---\n`;
+            const sheet = workbook.Sheets[sheetName];
+            
+            sheet.forEach(row => {
+                csvContent += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
+            });
+        });
+        
+        return csvContent;
+    }
+
+    /**
+     * Generate HTML content for PDF export
+     * @param {Object} data - Export data
+     * @returns {string} - HTML content
+     */
+    generatePDFHTML(data) {
         return `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Work Log Report</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .header { text-align: center; margin-bottom: 40px; }
-                .summary { background: #f8f9fa; padding: 20px; margin-bottom: 30px; }
-                .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-                .summary-item { text-align: center; }
-                .summary-value { font-size: 24px; font-weight: bold; color: #2563eb; }
-                .summary-label { font-size: 12px; color: #666; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f8f9fa; font-weight: bold; }
-                .entry-work { background-color: rgba(37, 99, 235, 0.1); }
-                .entry-leave { background-color: rgba(220, 38, 38, 0.1); }
-                .entry-holiday { background-color: rgba(22, 163, 74, 0.1); }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>📊 Work Log Report</h1>
-                <p>Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}</p>
-                <p>Generated: ${new Date().toLocaleDateString()}</p>
-            </div>
-            
-            <div class="summary">
-                <h2>Summary</h2>
-                <div class="summary-grid">
-                    <div class="summary-item">
-                        <div class="summary-value">${workDays}</div>
-                        <div class="summary-label">Work Days</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-value">${totalHours.toFixed(2)}</div>
-                        <div class="summary-label">Total Hours</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-value">${avgHours.toFixed(2)}</div>
-                        <div class="summary-label">Avg Hours/Day</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-value">${entries.length}</div>
-                        <div class="summary-label">Total Entries</div>
-                    </div>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Work Log Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h1, h2 { color: #333; }
+                    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .summary { background-color: #f9f9f9; padding: 15px; margin: 20px 0; }
+                    .metadata { color: #666; font-size: 12px; }
+                    @media print {
+                        body { margin: 0; }
+                        .no-print { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>Daily Work Log Report</h1>
+                
+                <div class="metadata">
+                    <p>Generated on: ${new Date(data.metadata.exportDate).toLocaleString()}</p>
+                    <p>Date Range: ${data.metadata.dateRange}</p>
+                    <p>Total Entries: ${data.metadata.totalEntries}</p>
                 </div>
-            </div>
-            
-            <h2>Detailed Entries</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Project</th>
-                        <th>Hours</th>
-                        <th>Comments</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${entries.map(entry => `
-                        <tr class="entry-${entry.type}">
-                            <td>${entry.date}</td>
-                            <td>${this.getEntryTypeLabel(entry.type)}</td>
-                            <td>${this.getProjectDisplayName(entry.project)}</td>
-                            <td>${entry.hours || this.getDefaultHours(entry.type)}</td>
-                            <td>${entry.comments || 'N/A'}</td>
+
+                <div class="summary">
+                    <h2>Summary</h2>
+                    <p>Total Days Worked: ${data.summary.totalDaysWorked}</p>
+                    <p>Total Hours: ${data.summary.totalHours}</p>
+                    <p>Average Hours per Day: ${data.summary.averageHours}</p>
+                    <p>Unique Projects: ${data.summary.uniqueProjects}</p>
+                </div>
+
+                <h2>Work Log Entries</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Day</th>
+                            <th>Type</th>
+                            <th>Project</th>
+                            <th>Hours</th>
+                            <th>Comments</th>
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </body>
-        </html>
+                    </thead>
+                    <tbody>
+                        ${data.entries.map(entry => `
+                            <tr>
+                                <td>${entry.date}</td>
+                                <td>${entry.dayOfWeek}</td>
+                                <td>${entry.type}</td>
+                                <td>${entry.project}</td>
+                                <td>${entry.hours}</td>
+                                <td>${entry.comments}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div class="no-print" style="margin-top: 30px;">
+                    <button onclick="window.print()">Print/Save as PDF</button>
+                    <button onclick="window.close()">Close</button>
+                </div>
+            </body>
+            </html>
         `;
     }
 
     /**
-     * Download file to user's device
-     * @param {string} content - File content
-     * @param {string} filename - File name
-     * @param {string} mimeType - MIME type
+     * Generate export filename
+     * @param {string} format - Export format
+     * @param {string} dateRange - Date range
+     * @returns {string} - Generated filename
      */
-    downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
+    generateFilename(format, dateRange) {
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
         
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Clean up the URL
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-    }
-
-    /**
-     * Flatten work log data structure
-     * @param {Object} workLogData - Work log data
-     * @returns {Array} - Flattened entries
-     */
-    flattenWorkLogData(workLogData) {
-        const entries = [];
-        
-        Object.keys(workLogData).forEach(dateKey => {
-            workLogData[dateKey].forEach(entry => {
-                entries.push({
-                    ...entry,
-                    date: dateKey,
-                    dayOfWeek: new Date(dateKey).toLocaleDateString('en-US', { weekday: 'long' })
-                });
-            });
-        });
-        
-        // Sort by date
-        return entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-    }
-
-    /**
-     * Get project display name
-     * @param {string} projectValue - Project value
-     * @returns {string} - Display name
-     */
-    getProjectDisplayName(projectValue) {
-        if (!projectValue) return 'N/A';
-        
-        const project = this.dataService.findProjectByValue(projectValue);
-        if (project) {
-            return `${project.projectId} - ${project.projectTitle}`;
+        let rangeStr;
+        switch (dateRange) {
+            case 'current-month':
+                rangeStr = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).replace(' ', '-').toLowerCase();
+                break;
+            case 'last-month':
+                const lastMonth = new Date();
+                lastMonth.setMonth(lastMonth.getMonth() - 1);
+                rangeStr = lastMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).replace(' ', '-').toLowerCase();
+                break;
+            case 'custom':
+                rangeStr = 'custom-range';
+                break;
+            case 'all':
+            default:
+                rangeStr = 'all-data';
         }
         
-        return projectValue;
-    }
-
-    /**
-     * Get project ID from project value
-     * @param {string} projectValue - Project value
-     * @returns {string} - Project ID
-     */
-    getProjectId(projectValue) {
-        if (!projectValue) return 'N/A';
-        
-        const project = this.dataService.findProjectByValue(projectValue);
-        return project ? project.projectId : projectValue.split('-')[0] || projectValue;
-    }
-
-    /**
-     * Get project title from project value
-     * @param {string} projectValue - Project value
-     * @returns {string} - Project title
-     */
-    getProjectTitle(projectValue) {
-        if (!projectValue) return 'N/A';
-        
-        const project = this.dataService.findProjectByValue(projectValue);
-        return project ? project.projectTitle : 'Unknown Project';
+        return `work-log-${rangeStr}-${dateStr}_${timeStr}.${format}`;
     }
 
     /**
      * Get entry type label
      * @param {string} type - Entry type
-     * @returns {string} - Entry type label
+     * @returns {string} - Human readable label
      */
     getEntryTypeLabel(type) {
-        const labels = {
+        const types = {
             work: 'Work Entry',
             fullLeave: 'Full Day Leave',
             halfLeave: 'Half Day Leave',
             holiday: 'Holiday'
         };
-        
-        return labels[type] || type;
+        return types[type] || type;
     }
 
     /**
-     * Get default hours for entry type
-     * @param {string} type - Entry type
-     * @returns {number} - Default hours
+     * Get entry hours based on type
+     * @param {Object} entry - Entry object
+     * @returns {number} - Hours for entry
      */
-    getDefaultHours(type) {
-        const defaults = {
-            work: 0,
-            fullLeave: 8,
-            halfLeave: 4,
-            holiday: 8
-        };
-        
-        return defaults[type] || 0;
+    getEntryHours(entry) {
+        switch (entry.type) {
+            case 'work':
+                return entry.hours || 0;
+            case 'fullLeave':
+            case 'holiday':
+                return 8;
+            case 'halfLeave':
+                return 4;
+            default:
+                return 0;
+        }
     }
 
     /**
-     * Escape CSV value
-     * @param {string} value - Value to escape
-     * @returns {string} - Escaped value
+     * Generate summary statistics
+     * @param {Array} entries - Entries array
+     * @returns {Object} - Summary statistics
      */
-    escapeCsvValue(value) {
-        if (typeof value !== 'string') return value;
-        return value.replace(/"/g, '""');
-    }
-
-    /**
-     * Get total entries count
-     * @returns {number} - Total entries
-     */
-    getTotalEntriesCount() {
-        const workLogData = this.dataService.getWorkLogData();
-        let count = 0;
-        
-        Object.keys(workLogData).forEach(dateKey => {
-            count += workLogData[dateKey].length;
-        });
-        
-        return count;
-    }
-
-    /**
-     * Get date range of data
-     * @returns {Object} - Date range
-     */
-    getDateRange() {
-        const workLogData = this.dataService.getWorkLogData();
-        const dates = Object.keys(workLogData).sort();
+    generateSummary(entries) {
+        const workEntries = entries.filter(entry => entry.type === 'Work Entry');
+        const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);
+        const totalDaysWorked = new Set(workEntries.map(entry => entry.date)).size;
+        const uniqueProjects = new Set(workEntries.map(entry => entry.project)).size;
         
         return {
-            earliest: dates[0] || null,
-            latest: dates[dates.length - 1] || null
+            totalEntries: entries.length,
+            totalWorkEntries: workEntries.length,
+            totalDaysWorked,
+            totalHours: parseFloat(totalHours.toFixed(2)),
+            averageHours: totalDaysWorked > 0 ? parseFloat((totalHours / totalDaysWorked).toFixed(2)) : 0,
+            uniqueProjects,
+            dateRange: {
+                earliest: entries.length > 0 ? entries[0].date : null,
+                latest: entries.length > 0 ? entries[entries.length - 1].date : null
+            }
         };
     }
 
     /**
-     * Merge work log data during import
-     * @param {Object} importData - Work log data to merge
-     * @returns {Promise<number>} - Number of entries imported
+     * Download file utility
+     * @param {string} content - File content
+     * @param {string} filename - Filename
+     * @param {string} mimeType - MIME type
      */
-    async mergeWorkLogData(importData) {
-        let importedCount = 0;
-        
-        Object.keys(importData).forEach(dateKey => {
-            const existingEntries = this.dataService.getEntriesForDate(dateKey);
-            const importEntries = importData[dateKey];
+    downloadFile(content, filename, mimeType) {
+        try {
+            const blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
             
-            importEntries.forEach(importEntry => {
-                // Check if entry already exists (by ID or similar content)
-                const exists = existingEntries.some(existing => 
-                    existing.id === importEntry.id ||
-                    (existing.type === importEntry.type && 
-                     existing.project === importEntry.project &&
-                     existing.hours === importEntry.hours)
-                );
-                
-                if (!exists) {
-                    this.dataService.addEntry(dateKey, importEntry);
-                    importedCount++;
-                }
-            });
-        });
-        
-        return importedCount;
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up the URL object
+            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+        } catch (error) {
+            console.error('File download failed:', error);
+            throw new Error('File download failed');
+        }
     }
 
     /**
-     * Merge project data during import
-     * @param {Array} importProjects - Projects to merge
-     * @returns {Promise<number>} - Number of projects imported
+     * Quick export current month data
+     * @param {string} format - Export format
+     * @returns {Promise} - Export result
      */
-    async mergeProjectData(importProjects) {
-        const existingProjects = this.dataService.getProjects();
-        let importedCount = 0;
+    async exportCurrentMonth(format = 'csv') {
+        return await this.export(format, {
+            dateRange: 'current-month',
+            filename: this.generateFilename(format, 'current-month')
+        });
+    }
+
+    /**
+     * Quick export all data
+     * @param {string} format - Export format
+     * @returns {Promise} - Export result
+     */
+    async exportAllData(format = 'csv') {
+        return await this.export(format, {
+            dateRange: 'all',
+            filename: this.generateFilename(format, 'all')
+        });
+    }
+
+    /**
+     * Export data for specific date
+     * @param {string} date - Date (YYYY-MM-DD)
+     * @param {string} format - Export format
+     * @returns {Promise} - Export result
+     */
+    async exportDateData(date, format = 'csv') {
+        return await this.export(format, {
+            dateRange: 'custom',
+            startDate: date,
+            endDate: date,
+            filename: `work-log-${date}.${format}`
+        });
+    }
+
+    /**
+     * Get supported export formats
+     * @returns {Array} - Array of supported formats
+     */
+    getSupportedFormats() {
+        return [...this.supportedFormats];
+    }
+
+    /**
+     * Validate export options
+     * @param {Object} options - Export options
+     * @returns {boolean} - Whether options are valid
+     */
+    validateExportOptions(options) {
+        const { dateRange, startDate, endDate, format } = options;
         
-        importProjects.forEach(importProject => {
-            const exists = existingProjects.some(existing =>
-                existing.projectId === importProject.projectId &&
-                existing.subCode === importProject.subCode
-            );
-            
-            if (!exists) {
-                this.dataService.addProject(importProject);
-                importedCount++;
+        if (format && !this.supportedFormats.includes(format)) {
+            throw new Error(`Unsupported format: ${format}`);
+        }
+        
+        if (dateRange === 'custom') {
+            if (!startDate || !endDate) {
+                throw new Error('Custom date range requires both start and end dates');
             }
-        });
+            
+            if (new Date(startDate) > new Date(endDate)) {
+                throw new Error('Start date must be before end date');
+            }
+        }
         
-        return importedCount;
-    }
-
-    /**
-     * Get total entries from data structure
-     * @param {Object} workLogData - Work log data
-     * @returns {number} - Total entries
-     */
-    getTotalEntriesFromData(workLogData) {
-        let count = 0;
-        Object.keys(workLogData).forEach(dateKey => {
-            count += workLogData[dateKey].length;
-        });
-        return count;
+        return true;
     }
 }
 

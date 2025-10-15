@@ -1,29 +1,40 @@
-// views/CalendarView.js - COMPLETE UPDATED VERSION WITH WEEKEND DETECTION & DASHBOARD INTEGRATION
-// Calendar View Controller and Renderer
+// views/CalendarView.js
+// Calendar View Class - Manages calendar display and interactions with weekend detection
 
 class CalendarView {
     constructor(dataService) {
         this.dataService = dataService;
-        this.currentDate = new Date();
-        this.selectedDate = null;
         this.elements = {};
         this.eventListeners = [];
+        this.currentDate = new Date();
+        this.selectedDate = null;
+        this.weekendDetectionEnabled = true;
         
         this.cacheElements();
+        this.initialize();
     }
 
     /**
-     * Cache DOM elements for performance
+     * Cache DOM elements
      */
     cacheElements() {
         this.elements = {
+            // Calendar container elements
             calendarGrid: document.getElementById('calendarGrid'),
+            calendarDates: document.getElementById('calendarDates'),
+            calendarWeekdays: document.getElementById('calendarWeekdays'),
+            
+            // Navigation elements
             currentMonth: document.getElementById('currentMonth'),
-            prevMonthBtn: document.getElementById('prevMonthBtn'),
-            nextMonthBtn: document.getElementById('nextMonthBtn'),
-            prevMonth: document.getElementById('prevMonth'),  // Alternative ID
-            nextMonth: document.getElementById('nextMonth'),  // Alternative ID
-            selectedDateDisplay: document.getElementById('selectedDateDisplay')
+            prevMonthBtn: document.getElementById('prevMonth'),
+            nextMonthBtn: document.getElementById('nextMonth'),
+            monthSelector: document.getElementById('monthSelector'),
+            
+            // Calendar header
+            calendarHeader: document.querySelector('.calendar-header'),
+            
+            // Legend elements
+            calendarLegend: document.querySelector('.calendar-legend')
         };
     }
 
@@ -32,596 +43,495 @@ class CalendarView {
      */
     initialize() {
         this.setupEventListeners();
+        this.createCalendarStructure();
         this.render();
-        
-        // Select today by default
-        const today = new Date();
-        this.selectDate(today);
+        console.log('CalendarView: Initialized successfully with weekend detection');
     }
 
     /**
-     * Set up event listeners
+     * Setup event listeners
      */
     setupEventListeners() {
-        // Previous month button (try both possible IDs)
-        const prevBtn = this.elements.prevMonthBtn || this.elements.prevMonth;
-        if (prevBtn) {
-            const prevHandler = () => this.navigateMonth(-1);
-            prevBtn.addEventListener('click', prevHandler);
-            this.eventListeners.push({
-                element: prevBtn,
-                event: 'click',
-                handler: prevHandler
+        // Month navigation
+        if (this.elements.prevMonthBtn) {
+            this.addEventListenerWithCleanup(this.elements.prevMonthBtn, 'click', () => {
+                this.navigateMonth(-1);
             });
         }
 
-        // Next month button (try both possible IDs)
-        const nextBtn = this.elements.nextMonthBtn || this.elements.nextMonth;
-        if (nextBtn) {
-            const nextHandler = () => this.navigateMonth(1);
-            nextBtn.addEventListener('click', nextHandler);
-            this.eventListeners.push({
-                element: nextBtn,
-                event: 'click',
-                handler: nextHandler
+        if (this.elements.nextMonthBtn) {
+            this.addEventListenerWithCleanup(this.elements.nextMonthBtn, 'click', () => {
+                this.navigateMonth(1);
             });
         }
 
-        // Keyboard navigation
-        const keyHandler = (e) => this.handleKeyboardNavigation(e);
-        document.addEventListener('keydown', keyHandler);
-        this.eventListeners.push({
-            element: document,
-            event: 'keydown',
-            handler: keyHandler
+        // Month selector dropdown
+        if (this.elements.monthSelector) {
+            this.addEventListenerWithCleanup(this.elements.monthSelector, 'change', (e) => {
+                this.navigateToMonth(e.target.value);
+            });
+        }
+
+        // Listen for data changes to refresh calendar
+        document.addEventListener('data:updated', () => {
+            this.refresh();
         });
+
+        document.addEventListener('data:entryAdded', () => {
+            this.refresh();
+        });
+
+        document.addEventListener('data:entryUpdated', () => {
+            this.refresh();
+        });
+
+        document.addEventListener('data:entryDeleted', () => {
+            this.refresh();
+        });
+
+        console.log('CalendarView: Event listeners set up');
     }
 
     /**
-     * Handle keyboard navigation
-     * @param {KeyboardEvent} event - Keyboard event
+     * Add event listener with cleanup tracking
      */
-    handleKeyboardNavigation(event) {
-        if (!this.selectedDate) return;
-
-        const { key, ctrlKey, metaKey } = event;
-        let newDate = null;
-
-        switch (key) {
-            case 'ArrowLeft':
-                newDate = new Date(this.selectedDate);
-                newDate.setDate(newDate.getDate() - 1);
-                break;
-            case 'ArrowRight':
-                newDate = new Date(this.selectedDate);
-                newDate.setDate(newDate.getDate() + 1);
-                break;
-            case 'ArrowUp':
-                newDate = new Date(this.selectedDate);
-                newDate.setDate(newDate.getDate() - 7);
-                break;
-            case 'ArrowDown':
-                newDate = new Date(this.selectedDate);
-                newDate.setDate(newDate.getDate() + 7);
-                break;
-            case 'Home':
-                if (ctrlKey || metaKey) {
-                    newDate = new Date();
-                } else {
-                    newDate = new Date(this.selectedDate);
-                    newDate.setDate(1);
-                }
-                break;
-            case 'End':
-                newDate = new Date(this.selectedDate);
-                newDate.setMonth(newDate.getMonth() + 1, 0);
-                break;
-            case 'PageUp':
-                newDate = new Date(this.selectedDate);
-                newDate.setMonth(newDate.getMonth() - 1);
-                break;
-            case 'PageDown':
-                newDate = new Date(this.selectedDate);
-                newDate.setMonth(newDate.getMonth() + 1);
-                break;
-        }
-
-        if (newDate) {
-            event.preventDefault();
-            this.selectDate(newDate);
+    addEventListenerWithCleanup(element, event, handler) {
+        if (element) {
+            element.addEventListener(event, handler);
+            this.eventListeners.push({ element, event, handler });
         }
     }
 
     /**
-     * Render the complete calendar
+     * Create calendar structure if it doesn't exist
+     */
+    createCalendarStructure() {
+        // Create weekdays header if it doesn't exist
+        if (!this.elements.calendarWeekdays) {
+            this.createWeekdaysHeader();
+        }
+
+        // Create calendar dates container if it doesn't exist
+        if (!this.elements.calendarDates) {
+            this.createCalendarDates();
+        }
+
+        // Create or update legend
+        this.createOrUpdateLegend();
+    }
+
+    /**
+     * Create weekdays header
+     */
+    createWeekdaysHeader() {
+        const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
+        let weekdaysContainer = document.querySelector('.calendar-weekdays');
+        if (!weekdaysContainer) {
+            weekdaysContainer = document.createElement('div');
+            weekdaysContainer.className = 'calendar-weekdays';
+            weekdaysContainer.style.cssText = `
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: var(--space-2);
+                margin-bottom: var(--space-8);
+            `;
+        }
+
+        weekdaysContainer.innerHTML = '';
+        
+        weekdays.forEach(day => {
+            const dayElement = document.createElement('div');
+            dayElement.className = 'weekday';
+            dayElement.textContent = day;
+            dayElement.style.cssText = `
+                text-align: center;
+                font-weight: var(--font-weight-semibold);
+                font-size: var(--font-size-sm);
+                color: var(--color-text-secondary);
+                padding: var(--space-8);
+            `;
+            weekdaysContainer.appendChild(dayElement);
+        });
+
+        // Insert before calendar dates or at the beginning of calendar grid
+        const calendarContainer = this.elements.calendarGrid || document.querySelector('.calendar-grid');
+        if (calendarContainer) {
+            if (this.elements.calendarDates) {
+                calendarContainer.insertBefore(weekdaysContainer, this.elements.calendarDates);
+            } else {
+                calendarContainer.appendChild(weekdaysContainer);
+            }
+        }
+
+        this.elements.calendarWeekdays = weekdaysContainer;
+    }
+
+    /**
+     * Create calendar dates container
+     */
+    createCalendarDates() {
+        let datesContainer = document.getElementById('calendarDates');
+        if (!datesContainer) {
+            datesContainer = document.createElement('div');
+            datesContainer.id = 'calendarDates';
+            datesContainer.className = 'calendar-dates';
+            datesContainer.style.cssText = `
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: var(--space-2);
+            `;
+
+            const calendarContainer = this.elements.calendarGrid || document.querySelector('.calendar-grid');
+            if (calendarContainer) {
+                calendarContainer.appendChild(datesContainer);
+            }
+        }
+
+        this.elements.calendarDates = datesContainer;
+    }
+
+    /**
+     * Create or update calendar legend
+     */
+    createOrUpdateLegend() {
+        let legend = document.querySelector('.calendar-legend');
+        if (!legend) {
+            legend = document.createElement('div');
+            legend.className = 'calendar-legend';
+            legend.style.cssText = `
+                display: flex;
+                gap: var(--space-16);
+                margin-bottom: var(--space-20);
+                flex-wrap: wrap;
+            `;
+
+            const calendarHeader = this.elements.calendarHeader || document.querySelector('.calendar-header');
+            if (calendarHeader) {
+                calendarHeader.appendChild(legend);
+            }
+        }
+
+        // Legend items with weekend detection
+        const legendItems = [
+            { class: 'work-logged', color: 'var(--color-primary)', label: 'Work Logged' },
+            { class: 'today-marker', color: 'var(--color-warning)', label: 'Today' },
+            { class: 'holiday-marker', color: 'var(--color-success)', label: 'Holiday/Leave' },
+            { class: 'weekend-marker', color: 'var(--color-info)', label: 'Weekend' }
+        ];
+
+        legend.innerHTML = '';
+        
+        legendItems.forEach(item => {
+            const legendItem = document.createElement('div');
+            legendItem.className = 'legend-item';
+            legendItem.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: var(--space-6);
+                font-size: var(--font-size-sm);
+                color: var(--color-text-secondary);
+            `;
+
+            const dot = document.createElement('span');
+            dot.className = `legend-dot ${item.class}`;
+            dot.style.cssText = `
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background-color: ${item.color};
+            `;
+
+            const label = document.createElement('span');
+            label.textContent = item.label;
+
+            legendItem.appendChild(dot);
+            legendItem.appendChild(label);
+            legend.appendChild(legendItem);
+        });
+
+        this.elements.calendarLegend = legend;
+    }
+
+    /**
+     * Render the calendar
      */
     render() {
-        if (!this.elements.calendarGrid || !this.elements.currentMonth) {
-            console.warn('Required calendar elements not found');
-            return;
+        this.updateMonthDisplay();
+        this.renderCalendarDays();
+        this.updateMonthSelector();
+    }
+
+    /**
+     * Update month display
+     */
+    updateMonthDisplay() {
+        if (this.elements.currentMonth) {
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                month: 'long',
+                year: 'numeric'
+            });
+            this.elements.currentMonth.textContent = formatter.format(this.currentDate);
         }
+    }
+
+    /**
+     * Render calendar days with weekend detection
+     */
+    renderCalendarDays() {
+        if (!this.elements.calendarDates) return;
 
         const year = this.currentDate.getFullYear();
         const month = this.currentDate.getMonth();
-
-        // Update month display
-        this.updateMonthDisplay();
-
-        // Clear existing calendar days
-        this.clearCalendarDays();
-
-        // Generate calendar grid
-        this.renderCalendarGrid(year, month);
-
-        // Update accessibility
-        this.updateAccessibility();
-    }
-
-    /**
-     * Update month display text
-     */
-    updateMonthDisplay() {
-        this.elements.currentMonth.textContent = new Intl.DateTimeFormat('en-US', {
-            month: 'long',
-            year: 'numeric'
-        }).format(this.currentDate);
-    }
-
-    /**
-     * Clear existing calendar days
-     */
-    clearCalendarDays() {
-        const existingDays = this.elements.calendarGrid.querySelectorAll('.calendar-day');
-        existingDays.forEach(day => {
-            this.removeEventListenersFromElement(day);
-            day.remove();
-        });
-    }
-
-    /**
-     * Render calendar grid for given month/year
-     * @param {number} year - Year to render
-     * @param {number} month - Month to render (0-11)
-     */
-    renderCalendarGrid(year, month) {
-        // Calculate calendar grid boundaries
+        
+        // Get first day of month and calculate starting date
         const firstDay = new Date(year, month, 1);
         const startDate = new Date(firstDay);
         startDate.setDate(startDate.getDate() - firstDay.getDay());
 
-        // Generate 42 days (6 weeks) for complete calendar grid
+        // Clear existing days
+        this.elements.calendarDates.innerHTML = '';
+
+        // Generate 42 days (6 weeks)
         for (let i = 0; i < 42; i++) {
             const date = new Date(startDate);
             date.setDate(startDate.getDate() + i);
             
             const dayElement = this.createCalendarDay(date, month);
-            this.elements.calendarGrid.appendChild(dayElement);
+            this.elements.calendarDates.appendChild(dayElement);
         }
     }
 
     /**
-     * ✅ UPDATED: Create individual calendar day element with weekend detection
+     * Create individual calendar day element
      * @param {Date} date - Date for this day
      * @param {number} currentMonth - Current month being displayed
-     * @returns {HTMLElement} - Calendar day element
+     * @returns {HTMLElement} - Day element
      */
     createCalendarDay(date, currentMonth) {
         const dayElement = document.createElement('div');
-        dayElement.className = 'calendar-day';
-        dayElement.textContent = date.getDate();
+        dayElement.className = 'calendar-date';
         dayElement.setAttribute('tabindex', '0');
-        dayElement.setAttribute('role', 'button');
         
         const dateKey = this.formatDateKey(date);
         const isCurrentMonth = date.getMonth() === currentMonth;
         const isToday = this.isDateToday(date);
         const isSelected = this.selectedDate && this.formatDateKey(this.selectedDate) === dateKey;
-        const entries = this.dataService.getEntriesForDate ? this.dataService.getEntriesForDate(dateKey) : [];
-        const hasEntries = entries.length > 0;
-        
-        // ✅ NEW: Weekend detection
+        const hasEntries = this.hasEntriesForDate(dateKey);
         const isWeekend = this.isWeekend(date);
-        const isSaturday = date.getDay() === 6;
-        const isSunday = date.getDay() === 0;
+        
+        // Base styling
+        dayElement.style.cssText = `
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-standard);
+            position: relative;
+            background-color: var(--color-background);
+            padding: var(--space-4);
+            min-height: 60px;
+        `;
 
-        // Apply CSS classes based on date properties
-        this.applyDayClasses(dayElement, {
-            isCurrentMonth,
-            isToday,
-            isSelected,
-            hasEntries,
-            entries,
-            dateKey,
-            isWeekend,
-            isSaturday,
-            isSunday
-        });
+        // Add CSS classes for styling
+        if (!isCurrentMonth) {
+            dayElement.classList.add('other-month');
+            dayElement.style.color = 'var(--color-text-secondary)';
+            dayElement.style.backgroundColor = 'var(--color-secondary)';
+            dayElement.style.cursor = 'default';
+        }
+        
+        if (isToday) {
+            dayElement.classList.add('today');
+            dayElement.style.borderColor = 'var(--color-warning)';
+            dayElement.style.backgroundColor = 'var(--color-bg-2)';
+            dayElement.style.fontWeight = 'var(--font-weight-semibold)';
+        }
+        
+        if (isSelected) {
+            dayElement.classList.add('selected');
+            dayElement.style.backgroundColor = 'var(--color-primary)';
+            dayElement.style.color = 'var(--color-btn-primary-text)';
+            dayElement.style.borderColor = 'var(--color-primary)';
+        }
+        
+        if (isWeekend && this.weekendDetectionEnabled) {
+            dayElement.classList.add('weekend');
+            if (!isSelected) {
+                dayElement.style.backgroundColor = 'var(--color-bg-8)';
+            }
+        }
+        
+        if (hasEntries) {
+            dayElement.classList.add('has-entries');
+            if (!isSelected) {
+                dayElement.style.borderColor = 'var(--color-primary)';
+            }
+        }
 
-        // Set up accessibility attributes with weekend info
-        this.setDayAccessibility(dayElement, date, entries, isWeekend);
+        // Create day number
+        const dateNumber = document.createElement('div');
+        dateNumber.className = 'date-number';
+        dateNumber.textContent = date.getDate();
+        dateNumber.style.cssText = `
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-medium);
+            margin-bottom: var(--space-2);
+        `;
 
-        // Add event listeners
-        this.attachDayEventListeners(dayElement, date);
+        dayElement.appendChild(dateNumber);
+
+        // Add entry indicators
+        if (hasEntries) {
+            this.addEntryIndicators(dayElement, dateKey, isSelected);
+        }
+
+        // Add event listeners for current month days only
+        if (isCurrentMonth) {
+            dayElement.addEventListener('click', () => {
+                this.selectDate(date);
+            });
+            
+            dayElement.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.selectDate(date);
+                }
+            });
+
+            // Hover effects
+            dayElement.addEventListener('mouseenter', () => {
+                if (!isSelected) {
+                    dayElement.style.borderColor = 'var(--color-primary)';
+                    dayElement.style.backgroundColor = 'var(--color-bg-1)';
+                }
+            });
+
+            dayElement.addEventListener('mouseleave', () => {
+                if (!isSelected) {
+                    // Restore original background
+                    if (isToday) {
+                        dayElement.style.backgroundColor = 'var(--color-bg-2)';
+                        dayElement.style.borderColor = 'var(--color-warning)';
+                    } else if (isWeekend && this.weekendDetectionEnabled) {
+                        dayElement.style.backgroundColor = 'var(--color-bg-8)';
+                        dayElement.style.borderColor = 'var(--color-border)';
+                    } else if (hasEntries) {
+                        dayElement.style.backgroundColor = 'var(--color-background)';
+                        dayElement.style.borderColor = 'var(--color-primary)';
+                    } else {
+                        dayElement.style.backgroundColor = 'var(--color-background)';
+                        dayElement.style.borderColor = 'var(--color-border)';
+                    }
+                }
+            });
+        }
 
         return dayElement;
     }
 
     /**
-     * ✅ UPDATED: Apply CSS classes to day element with weekend support
+     * Add entry indicators to calendar day
      * @param {HTMLElement} dayElement - Day element
-     * @param {Object} props - Day properties
+     * @param {string} dateKey - Date key
+     * @param {boolean} isSelected - Whether day is selected
      */
-    applyDayClasses(dayElement, { isCurrentMonth, isToday, isSelected, hasEntries, entries, dateKey, isWeekend, isSaturday, isSunday }) {
-        // Basic state classes
-        if (!isCurrentMonth) {
-            dayElement.classList.add('other-month');
+    addEntryIndicators(dayElement, dateKey, isSelected) {
+        const entries = this.dataService.getEntriesForDate(dateKey);
+        
+        // Add entry count indicator
+        const entryCount = document.createElement('div');
+        entryCount.className = 'entry-count';
+        entryCount.textContent = entries.length;
+        entryCount.style.cssText = `
+            position: absolute;
+            top: var(--space-2);
+            right: var(--space-2);
+            background-color: ${isSelected ? 'var(--color-btn-primary-text)' : 'var(--color-primary)'};
+            color: ${isSelected ? 'var(--color-primary)' : 'var(--color-btn-primary-text)'};
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: var(--font-weight-bold);
+        `;
+        dayElement.appendChild(entryCount);
+
+        // Add hours indicator for work entries
+        const workEntries = entries.filter(entry => entry.type === 'work');
+        if (workEntries.length > 0) {
+            const totalHours = workEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+            
+            const hoursIndicator = document.createElement('div');
+            hoursIndicator.className = 'hours-indicator';
+            hoursIndicator.textContent = `${totalHours}h`;
+            hoursIndicator.style.cssText = `
+                font-size: 10px;
+                color: ${isSelected ? 'var(--color-btn-primary-text)' : 'var(--color-text-secondary)'};
+                margin-top: auto;
+            `;
+            dayElement.appendChild(hoursIndicator);
         }
 
-        if (isToday) {
-            dayElement.classList.add('today');
-        }
+        // Add entry type indicators
+        const entryTypes = [...new Set(entries.map(entry => entry.type))];
+        if (entryTypes.length > 0) {
+            const typeIndicators = document.createElement('div');
+            typeIndicators.className = 'type-indicators';
+            typeIndicators.style.cssText = `
+                position: absolute;
+                bottom: var(--space-2);
+                left: var(--space-2);
+                display: flex;
+                gap: var(--space-1);
+            `;
 
-        if (isSelected) {
-            dayElement.classList.add('selected');
-        }
+            entryTypes.forEach(type => {
+                const indicator = document.createElement('div');
+                indicator.className = `type-indicator ${type}`;
+                indicator.style.cssText = `
+                    width: 4px;
+                    height: 4px;
+                    border-radius: 50%;
+                    background-color: ${this.getEntryTypeColor(type)};
+                `;
+                typeIndicators.appendChild(indicator);
+            });
 
-        // ✅ NEW: Weekend classes
-        if (isWeekend) {
-            dayElement.classList.add('weekend');
-            
-            if (isSaturday) {
-                dayElement.classList.add('saturday');
-            }
-            
-            if (isSunday) {
-                dayElement.classList.add('sunday');
-            }
-        }
-
-        // Entry type classes with improved logic
-        if (hasEntries) {
-            dayElement.classList.add('has-entries');
-            
-            // Get entry type classes for proper coloring
-            const entryTypeClass = this.getEntryTypeClasses(entries);
-            if (entryTypeClass) {
-                dayElement.classList.add(entryTypeClass);
-            }
-
-            // Add data attribute for entry count
-            dayElement.setAttribute('data-entry-count', entries.length);
-            
-            // ✅ NEW: Add special class for weekend work
-            if (isWeekend && entries.some(e => e.type === 'work')) {
-                dayElement.classList.add('has-weekend-work');
-            }
+            dayElement.appendChild(typeIndicators);
         }
     }
 
     /**
-     * ✅ UPDATED: Set accessibility attributes with weekend info
-     * @param {HTMLElement} dayElement - Day element
-     * @param {Date} date - Date for this day
-     * @param {Array} entries - Entries for this date
-     * @param {boolean} isWeekend - Whether this is a weekend
+     * Get color for entry type
+     * @param {string} type - Entry type
+     * @returns {string} - Color value
      */
-    setDayAccessibility(dayElement, date, entries, isWeekend = false) {
-        const dateString = date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-        });
-
-        let ariaLabel = dateString;
-        let tooltip = dateString;
-        
-        // ✅ NEW: Add weekend information
-        if (isWeekend) {
-            const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-            ariaLabel += `, Weekend (${dayName})`;
-            tooltip += `\n🏖️ Weekend (${dayName})`;
-        }
-        
-        if (entries && entries.length > 0) {
-            ariaLabel += `. ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
-            
-            const entryTypes = this.getEntryTypesForDate(entries);
-            if (entryTypes.length > 0) {
-                const entryTypeLabels = entryTypes.map(type => {
-                    const typeInfo = this.getEntryTypeInfo(type);
-                    return typeInfo ? typeInfo.label : type;
-                });
-                
-                ariaLabel += `: ${entryTypeLabels.join(', ')}`;
-                tooltip += `\n📝 ${entryTypeLabels.join(', ')}`;
-            }
-
-            // ✅ NEW: Special note for weekend work
-            if (isWeekend) {
-                const workEntries = entries.filter(e => e.type === 'work');
-                if (workEntries.length > 0) {
-                    const workHours = workEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-                    tooltip += `\n⚠️ Weekend work: ${workHours} hours`;
-                }
-            }
-        } else if (isWeekend) {
-            tooltip += '\nNo entries logged for this weekend day';
-        }
-
-        if (this.isDateToday(date)) {
-            ariaLabel += '. Today';
-            tooltip += '\n⭐ Today';
-        }
-
-        dayElement.setAttribute('aria-label', ariaLabel);
-        dayElement.setAttribute('title', tooltip);
+    getEntryTypeColor(type) {
+        const colors = {
+            work: 'var(--color-primary)',
+            fullLeave: 'var(--color-error)',
+            halfLeave: 'var(--color-warning)',
+            holiday: 'var(--color-success)'
+        };
+        return colors[type] || 'var(--color-info)';
     }
 
     /**
-     * ✅ NEW: Check if date is weekend
+     * Check if date is weekend
      * @param {Date} date - Date to check
      * @returns {boolean} - Whether date is weekend
      */
     isWeekend(date) {
         const dayOfWeek = date.getDay();
         return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
-    }
-
-    /**
-     * ✅ UPDATED: Get entry type classes for calendar day indicators
-     * @param {Array} entries - Array of entries for the day
-     * @returns {string} - CSS classes for entry types
-     */
-    getEntryTypeClasses(entries) {
-        if (!entries || entries.length === 0) {
-            return '';
-        }
-
-        const entryTypes = new Set();
-        entries.forEach(entry => {
-            entryTypes.add(entry.type);
-        });
-
-        const typeArray = Array.from(entryTypes);
-        
-        if (typeArray.length === 1) {
-            // Single entry type - use specific color class
-            return `has-${typeArray[0]}`;
-        } else if (typeArray.length > 1) {
-            // Multiple entry types - use mixed color indicator
-            return 'has-mixed-entries';
-        }
-        
-        return '';
-    }
-
-    /**
-     * ✅ UPDATED: Get entry type information
-     * @param {string} type - Entry type
-     * @returns {Object} - Entry type information
-     */
-    getEntryTypeInfo(type) {
-        const entryTypes = {
-            work: { label: 'Work Entry', color: '#2563eb', icon: '💼' },
-            fullLeave: { label: 'Full Day Leave', color: '#dc2626', icon: '🏖️' },
-            halfLeave: { label: 'Half Day Leave', color: '#ea580c', icon: '🌅' },
-            holiday: { label: 'Holiday', color: '#16a34a', icon: '🎉' }
-        };
-        
-        return entryTypes[type] || { label: type, color: '#6b7280', icon: '📝' };
-    }
-
-    /**
-     * ✅ NEW: Get weekend statistics for analytics
-     * @param {Date} month - Month to analyze (defaults to current month)
-     * @returns {Object} - Weekend statistics
-     */
-    getWeekendStats(month = new Date()) {
-        const year = month.getFullYear();
-        const monthIndex = month.getMonth();
-        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-        
-        let weekends = 0;
-        let saturdays = 0;
-        let sundays = 0;
-        let weekendWorkDays = 0;
-        let weekendWorkHours = 0;
-        
-        for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(year, monthIndex, day);
-            const dayOfWeek = date.getDay();
-            
-            if (dayOfWeek === 0) { // Sunday
-                weekends++;
-                sundays++;
-            } else if (dayOfWeek === 6) { // Saturday  
-                weekends++;
-                saturdays++;
-            }
-
-            // Check for weekend work
-            if (this.isWeekend(date) && this.dataService.getEntriesForDate) {
-                const dateKey = this.formatDateKey(date);
-                const entries = this.dataService.getEntriesForDate(dateKey);
-                const workEntries = entries.filter(e => e.type === 'work');
-                
-                if (workEntries.length > 0) {
-                    weekendWorkDays++;
-                    weekendWorkHours += workEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-                }
-            }
-        }
-        
-        return {
-            totalWeekends: weekends,
-            saturdays: saturdays,
-            sundays: sundays,
-            workingDays: daysInMonth - weekends,
-            weekendWorkDays: weekendWorkDays,
-            weekendWorkHours: weekendWorkHours
-        };
-    }
-
-    /**
-     * Attach event listeners to day element
-     * @param {HTMLElement} dayElement - Day element
-     * @param {Date} date - Date for this day
-     */
-    attachDayEventListeners(dayElement, date) {
-        // Click handler
-        const clickHandler = () => this.selectDate(date);
-        dayElement.addEventListener('click', clickHandler);
-
-        // Keyboard handler
-        const keyHandler = (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                this.selectDate(date);
-            }
-        };
-        dayElement.addEventListener('keydown', keyHandler);
-
-        // Store handlers for cleanup
-        this.eventListeners.push(
-            { element: dayElement, event: 'click', handler: clickHandler },
-            { element: dayElement, event: 'keydown', handler: keyHandler }
-        );
-    }
-
-    /**
-     * Navigate to previous/next month
-     * @param {number} direction - Direction (-1 for previous, 1 for next)
-     */
-    navigateMonth(direction) {
-        this.currentDate.setMonth(this.currentDate.getMonth() + direction);
-        this.render();
-        
-        // Dispatch month change event
-        this.dispatchEvent('monthChanged', {
-            month: this.currentDate.getMonth(),
-            year: this.currentDate.getFullYear(),
-            date: new Date(this.currentDate)
-        });
-    }
-
-    /**
-     * Select a specific date
-     * @param {Date} date - Date to select
-     */
-    selectDate(date) {
-        const newDate = new Date(date);
-        
-        // Update current month if selected date is in different month
-        if (newDate.getMonth() !== this.currentDate.getMonth() || 
-            newDate.getFullYear() !== this.currentDate.getFullYear()) {
-            this.currentDate = new Date(newDate.getFullYear(), newDate.getMonth(), 1);
-            this.render();
-        }
-        
-        this.selectedDate = newDate;
-        this.updateSelectedDateDisplay();
-        this.updateCalendarSelection();
-        
-        // ✅ UPDATED: Get entries with fallback for different dataService methods
-        let entries = [];
-        if (this.dataService.getEntriesForDate) {
-            entries = this.dataService.getEntriesForDate(this.formatDateKey(this.selectedDate));
-        } else if (this.dataService.getWorkLogData) {
-            const workLogData = this.dataService.getWorkLogData();
-            entries = workLogData[this.formatDateKey(this.selectedDate)] || [];
-        }
-        
-        // Dispatch date selection event
-        this.dispatchEvent('dateSelected', {
-            date: new Date(this.selectedDate),
-            dateKey: this.formatDateKey(this.selectedDate),
-            entries: entries,
-            isWeekend: this.isWeekend(this.selectedDate)  // ✅ NEW: Include weekend info
-        });
-    }
-
-    /**
-     * Update calendar visual selection
-     */
-    updateCalendarSelection() {
-        // Remove previous selection
-        const previousSelected = this.elements.calendarGrid.querySelectorAll('.selected');
-        previousSelected.forEach(el => el.classList.remove('selected'));
-
-        // Add selection to current date
-        if (this.selectedDate) {
-            const selectedDay = this.findDayElement(this.selectedDate);
-            if (selectedDay) {
-                selectedDay.classList.add('selected');
-                selectedDay.focus();
-            }
-        }
-    }
-
-    /**
-     * Find day element for specific date
-     * @param {Date} date - Date to find
-     * @returns {HTMLElement|null} - Day element or null
-     */
-    findDayElement(date) {
-        const dayElements = this.elements.calendarGrid.querySelectorAll('.calendar-day');
-        const targetDay = date.getDate();
-        
-        return Array.from(dayElements).find(el => {
-            return parseInt(el.textContent) === targetDay && 
-                   !el.classList.contains('other-month');
-        }) || null;
-    }
-
-    /**
-     * Update selected date display
-     */
-    updateSelectedDateDisplay() {
-        if (!this.elements.selectedDateDisplay) return;
-
-        if (this.selectedDate) {
-            const formatted = new Intl.DateTimeFormat('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            }).format(this.selectedDate);
-            
-            // ✅ NEW: Add weekend indicator to selected date display
-            const weekendIndicator = this.isWeekend(this.selectedDate) ? ' 🏖️' : '';
-            this.elements.selectedDateDisplay.textContent = formatted + weekendIndicator;
-        } else {
-            this.elements.selectedDateDisplay.textContent = 'Please select a date';
-        }
-    }
-
-    /**
-     * Update accessibility attributes
-     */
-    updateAccessibility() {
-        if (this.elements.calendarGrid) {
-            this.elements.calendarGrid.setAttribute('role', 'grid');
-            this.elements.calendarGrid.setAttribute('aria-label', 'Calendar');
-        }
-    }
-
-    /**
-     * Get entry types for a specific date
-     * @param {Array} entries - Entries for the date
-     * @returns {Array} - Unique entry types
-     */
-    getEntryTypesForDate(entries) {
-        return [...new Set(entries.map(entry => entry.type))];
-    }
-
-    /**
-     * Format date as key (YYYY-MM-DD)
-     * @param {Date} date - Date to format
-     * @returns {string} - Formatted date key
-     */
-    formatDateKey(date) {
-        return date.toISOString().split('T')[0];
     }
 
     /**
@@ -635,56 +545,130 @@ class CalendarView {
     }
 
     /**
-     * Dispatch custom event
-     * @param {string} eventName - Event name
-     * @param {Object} data - Event data
+     * Check if date has entries
+     * @param {string} dateKey - Date key (YYYY-MM-DD)
+     * @returns {boolean} - Whether date has entries
      */
-    dispatchEvent(eventName, data) {
-        const event = new CustomEvent(`calendar:${eventName}`, {
-            detail: data,
-            bubbles: true
+    hasEntriesForDate(dateKey) {
+        const entries = this.dataService.getEntriesForDate(dateKey);
+        return entries.length > 0;
+    }
+
+    /**
+     * Format date as key (YYYY-MM-DD)
+     * @param {Date} date - Date to format
+     * @returns {string} - Formatted date key
+     */
+    formatDateKey(date) {
+        return date.toISOString().split('T')[0];
+    }
+
+    /**
+     * Select a date
+     * @param {Date} date - Date to select
+     */
+    selectDate(date) {
+        this.selectedDate = date;
+        const dateKey = this.formatDateKey(date);
+        
+        // Dispatch event
+        const event = new CustomEvent('calendar:dateSelected', {
+            detail: {
+                date: date,
+                dateKey: dateKey
+            }
+        });
+        document.dispatchEvent(event);
+        
+        // Re-render to show selection
+        this.renderCalendarDays();
+        
+        console.log(`CalendarView: Selected date ${dateKey}`);
+    }
+
+    /**
+     * Navigate months
+     * @param {number} direction - Direction (-1 for previous, 1 for next)
+     */
+    navigateMonth(direction) {
+        this.currentDate.setMonth(this.currentDate.getMonth() + direction);
+        this.render();
+        
+        // Dispatch event
+        const event = new CustomEvent('calendar:monthChanged', {
+            detail: {
+                date: new Date(this.currentDate),
+                monthKey: this.formatDateKey(this.currentDate).substring(0, 7)
+            }
         });
         document.dispatchEvent(event);
     }
 
     /**
-     * Remove event listeners from element
-     * @param {HTMLElement} element - Element to clean up
+     * Navigate to specific month
+     * @param {string} monthKey - Month key (YYYY-MM)
      */
-    removeEventListenersFromElement(element) {
-        this.eventListeners = this.eventListeners.filter(listener => {
-            if (listener.element === element) {
-                element.removeEventListener(listener.event, listener.handler);
-                return false;
+    navigateToMonth(monthKey) {
+        const [year, month] = monthKey.split('-').map(Number);
+        this.currentDate = new Date(year, month - 1, 1);
+        this.render();
+        
+        // Dispatch event
+        const event = new CustomEvent('calendar:monthChanged', {
+            detail: {
+                date: new Date(this.currentDate),
+                monthKey: monthKey
             }
-            return true;
+        });
+        document.dispatchEvent(event);
+    }
+
+    /**
+     * Update month selector dropdown
+     */
+    updateMonthSelector() {
+        if (!this.elements.monthSelector) return;
+
+        // Get available months from data
+        const workLogData = this.dataService.getWorkLogData();
+        const availableMonths = new Set();
+        
+        // Add months that have data
+        Object.keys(workLogData).forEach(dateKey => {
+            const monthKey = dateKey.substring(0, 7);
+            availableMonths.add(monthKey);
+        });
+
+        // Add current month if not in data
+        const currentMonthKey = this.formatDateKey(this.currentDate).substring(0, 7);
+        availableMonths.add(currentMonthKey);
+
+        // Sort months
+        const sortedMonths = Array.from(availableMonths).sort().reverse();
+
+        // Update selector
+        this.elements.monthSelector.innerHTML = '';
+        sortedMonths.forEach(monthKey => {
+            const option = document.createElement('option');
+            option.value = monthKey;
+            option.textContent = this.formatMonthKey(monthKey);
+            option.selected = monthKey === currentMonthKey;
+            this.elements.monthSelector.appendChild(option);
         });
     }
 
-    // Public API methods
-
     /**
-     * Get current displayed date
-     * @returns {Date} - Current date
+     * Format month key for display
+     * @param {string} monthKey - Month key (YYYY-MM)
+     * @returns {string} - Formatted month
      */
-    getCurrentDate() {
-        return new Date(this.currentDate);
-    }
-
-    /**
-     * Get selected date
-     * @returns {Date|null} - Selected date
-     */
-    getSelectedDate() {
-        return this.selectedDate ? new Date(this.selectedDate) : null;
-    }
-
-    /**
-     * Get selected date key
-     * @returns {string|null} - Selected date key
-     */
-    getSelectedDateKey() {
-        return this.selectedDate ? this.formatDateKey(this.selectedDate) : null;
+    formatMonthKey(monthKey) {
+        const [year, month] = monthKey.split('-');
+        const date = new Date(year, month - 1, 1);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long'
+        });
     }
 
     /**
@@ -692,151 +676,93 @@ class CalendarView {
      */
     refresh() {
         this.render();
+        console.log('CalendarView: Refreshed');
     }
 
     /**
-     * Set current displayed month/year
+     * Set current date (programmatically)
      * @param {Date} date - Date to set as current
      */
     setCurrentDate(date) {
-        this.currentDate = new Date(date.getFullYear(), date.getMonth(), 1);
+        this.currentDate = new Date(date);
         this.render();
     }
 
     /**
-     * Go to today
+     * Get current month data
+     * @returns {Object} - Current month information
      */
-    goToToday() {
-        const today = new Date();
-        this.setCurrentDate(today);
-        this.selectDate(today);
+    getCurrentMonthData() {
+        const monthKey = this.formatDateKey(this.currentDate).substring(0, 7);
+        const workLogData = this.dataService.getWorkLogData();
+        
+        // Get all dates for current month
+        const monthDates = Object.keys(workLogData).filter(dateKey => 
+            dateKey.startsWith(monthKey)
+        );
+
+        return {
+            monthKey,
+            totalDays: monthDates.length,
+            totalEntries: monthDates.reduce((sum, dateKey) => 
+                sum + workLogData[dateKey].length, 0
+            ),
+            workDays: monthDates.filter(dateKey =>
+                workLogData[dateKey].some(entry => entry.type === 'work')
+            ).length
+        };
     }
 
     /**
-     * Highlight specific dates with custom class
-     * @param {Array} dateKeys - Array of date keys to highlight
-     * @param {string} className - CSS class to add
+     * Enable/disable weekend detection
+     * @param {boolean} enabled - Whether to enable weekend detection
      */
-    highlightDates(dateKeys, className) {
-        dateKeys.forEach(dateKey => {
-            const date = new Date(dateKey);
-            const dayElement = this.findDayElement(date);
+    setWeekendDetection(enabled) {
+        this.weekendDetectionEnabled = enabled;
+        this.refresh();
+        console.log(`CalendarView: Weekend detection ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
+    /**
+     * Get selected date
+     * @returns {Date|null} - Currently selected date
+     */
+    getSelectedDate() {
+        return this.selectedDate;
+    }
+
+    /**
+     * Get current date
+     * @returns {Date} - Current calendar date
+     */
+    getCurrentDate() {
+        return new Date(this.currentDate);
+    }
+
+    /**
+     * Highlight specific dates
+     * @param {Array} dates - Array of date objects with highlighting info
+     */
+    highlightDates(dates) {
+        // Implementation for highlighting specific dates
+        dates.forEach(({ date, className, style }) => {
+            const dateKey = this.formatDateKey(date);
+            const dayElement = document.querySelector(`[data-date="${dateKey}"]`);
             if (dayElement) {
-                dayElement.classList.add(className);
+                if (className) dayElement.classList.add(className);
+                if (style) Object.assign(dayElement.style, style);
             }
         });
     }
 
     /**
-     * ✅ UPDATED: Get calendar statistics with weekend info
-     * @returns {Object} - Calendar statistics
+     * Clear all date highlights
      */
-    getCalendarStats() {
-        // Get all dates with entries using available dataService methods
-        let dates = [];
-        if (this.dataService.getAllDatesWithEntries) {
-            dates = this.dataService.getAllDatesWithEntries();
-        } else if (this.dataService.getWorkLogData) {
-            dates = Object.keys(this.dataService.getWorkLogData());
-        }
-
-        const currentMonthEntries = dates.filter(dateKey => {
-            const date = new Date(dateKey);
-            return date.getMonth() === this.currentDate.getMonth() &&
-                   date.getFullYear() === this.currentDate.getFullYear();
+    clearHighlights() {
+        const highlightedElements = document.querySelectorAll('.calendar-date.highlighted');
+        highlightedElements.forEach(element => {
+            element.classList.remove('highlighted');
         });
-
-        return {
-            totalDatesWithEntries: dates.length,
-            currentMonthDatesWithEntries: currentMonthEntries.length,
-            selectedDate: this.getSelectedDate(),
-            currentMonth: this.getCurrentDate(),
-            weekendStats: this.getWeekendStats(this.currentDate)  // ✅ NEW
-        };
-    }
-
-    /**
-     * ✅ NEW: Get entry type summary for tooltip
-     * @param {Array} entries - Entries for a date
-     * @returns {string} - Summary string
-     */
-    getEntryTypeSummary(entries) {
-        if (!entries || entries.length === 0) {
-            return 'No entries';
-        }
-
-        const typeCounts = {};
-        entries.forEach(entry => {
-            typeCounts[entry.type] = (typeCounts[entry.type] || 0) + 1;
-        });
-
-        const summary = Object.entries(typeCounts)
-            .map(([type, count]) => {
-                const typeInfo = this.getEntryTypeInfo(type);
-                return `${count} ${typeInfo.label}${count > 1 ? 's' : ''}`;
-            })
-            .join(', ');
-
-        return `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}: ${summary}`;
-    }
-
-    /**
-     * ✅ NEW: Get weekend work summary for current month
-     * @returns {Object} - Weekend work summary
-     */
-    getWeekendWorkSummary() {
-        const weekendStats = this.getWeekendStats(this.currentDate);
-        const month = this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        
-        return {
-            month: month,
-            totalWeekends: weekendStats.totalWeekends,
-            weekendWorkDays: weekendStats.weekendWorkDays,
-            weekendWorkHours: weekendStats.weekendWorkHours,
-            percentageOfWeekendsWorked: weekendStats.totalWeekends > 0 
-                ? ((weekendStats.weekendWorkDays / weekendStats.totalWeekends) * 100).toFixed(1)
-                : 0
-        };
-    }
-
-    /**
-     * ✅ NEW: Get all weekend dates in current month
-     * @returns {Array} - Array of weekend date objects
-     */
-    getCurrentMonthWeekends() {
-        const year = this.currentDate.getFullYear();
-        const month = this.currentDate.getMonth();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const weekends = [];
-        
-        for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(year, month, day);
-            if (this.isWeekend(date)) {
-                const dateKey = this.formatDateKey(date);
-                let entries = [];
-                
-                if (this.dataService.getEntriesForDate) {
-                    entries = this.dataService.getEntriesForDate(dateKey);
-                } else if (this.dataService.getWorkLogData) {
-                    const workLogData = this.dataService.getWorkLogData();
-                    entries = workLogData[dateKey] || [];
-                }
-                
-                weekends.push({
-                    date: new Date(date),
-                    dateKey: dateKey,
-                    dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
-                    isSaturday: date.getDay() === 6,
-                    isSunday: date.getDay() === 0,
-                    hasEntries: entries.length > 0,
-                    hasWork: entries.some(e => e.type === 'work'),
-                    entries: entries,
-                    workHours: entries.filter(e => e.type === 'work').reduce((sum, e) => sum + (e.hours || 0), 0)
-                });
-            }
-        }
-        
-        return weekends;
     }
 
     /**
@@ -847,6 +773,21 @@ class CalendarView {
             element.removeEventListener(event, handler);
         });
         this.eventListeners = [];
+    }
+
+    /**
+     * Get calendar statistics
+     * @returns {Object} - Calendar statistics
+     */
+    getCalendarStats() {
+        const monthData = this.getCurrentMonthData();
+        
+        return {
+            currentMonth: this.formatMonthKey(monthData.monthKey),
+            selectedDate: this.selectedDate ? this.formatDateKey(this.selectedDate) : null,
+            weekendDetection: this.weekendDetectionEnabled,
+            ...monthData
+        };
     }
 }
 

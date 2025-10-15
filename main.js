@@ -3,7 +3,7 @@
 // Fixed version with all missing dependencies resolved
 
 // Import Firebase configuration
-import { firebaseApp, auth, db, isInitialized as firebaseIsInitialized } from './config/firebase.js';
+import { firebaseApp, auth, db, isInitialized as firebaseIsInitialized } from '/config/firebase.js';
 
 // Import Models
 import User from './models/User.js';

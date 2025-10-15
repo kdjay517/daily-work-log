@@ -1,90 +1,64 @@
 // models/WorkEntry.js
-// Work Entry Data Model
+// Work Entry Model Class - Individual work entry data structure and operations
 
 class WorkEntry {
     constructor(data = {}) {
         this.id = data.id || this.generateId();
-        this.type = data.type || 'work'; // 'work', 'fullLeave', 'halfLeave', 'holiday'
+        this.type = data.type || 'work'; // work, fullLeave, halfLeave, holiday
+        this.date = data.date || new Date().toISOString().split('T')[0];
         this.project = data.project || '';
-        this.hours = data.hours || 0;
-        this.halfDayPeriod = data.halfDayPeriod || ''; // 'morning', 'afternoon'
+        this.hours = parseFloat(data.hours) || 0;
+        this.halfDayPeriod = data.halfDayPeriod || ''; // morning, afternoon
         this.comments = data.comments || '';
         this.timestamp = data.timestamp || new Date().toISOString();
-        this.date = data.date || '';
+        this.userId = data.userId || '';
+        
+        // Validate data
+        this.validate();
     }
 
     /**
-     * Get static entry types configuration
-     * @returns {Object} - Entry types with display information
+     * Generate unique ID for entry
+     * @returns {string} - Unique ID
      */
-    static getEntryTypes() {
-        return {
-            work: { 
-                label: "Work Entry", 
-                color: "#3b82f6", 
-                maxHours: 8,
-                description: "Regular work hours"
-            },
-            fullLeave: { 
-                label: "Full Day Leave", 
-                color: "#ef4444", 
-                maxHours: 8,
-                description: "Complete day off"
-            },
-            halfLeave: { 
-                label: "Half Day Leave", 
-                color: "#f97316", 
-                maxHours: 4,
-                description: "Half day off (morning/afternoon)"
-            },
-            holiday: { 
-                label: "Holiday", 
-                color: "#22c55e", 
-                maxHours: 8,
-                description: "Public or company holiday"
-            }
-        };
+    generateId() {
+        return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
     /**
      * Validate entry data
-     * @returns {Object} - Validation result with errors
+     * @throws {Error} - Validation error
      */
     validate() {
         const errors = [];
 
-        if (!this.type) {
-            errors.push('Entry type is required');
+        // Validate entry type
+        const validTypes = ['work', 'fullLeave', 'halfLeave', 'holiday'];
+        if (!validTypes.includes(this.type)) {
+            errors.push(`Invalid entry type: ${this.type}`);
         }
 
-        if (!Object.keys(WorkEntry.getEntryTypes()).includes(this.type)) {
-            errors.push('Invalid entry type');
+        // Validate date format
+        if (!this.isValidDate(this.date)) {
+            errors.push('Invalid date format');
         }
 
+        // Validate hours for work entries
         if (this.type === 'work') {
             if (!this.project) {
-                errors.push('Project selection is required for work entries');
+                errors.push('Project is required for work entries');
             }
-            if (!this.hours || this.hours <= 0) {
-                errors.push('Hours must be greater than 0 for work entries');
-            }
-            if (this.hours > 8) {
-                errors.push('Hours cannot exceed 8 for work entries');
+            if (this.hours <= 0 || this.hours > 24) {
+                errors.push('Work hours must be between 0 and 24');
             }
         }
 
+        // Validate half day period for half leave
         if (this.type === 'halfLeave') {
-            if (!this.halfDayPeriod) {
-                errors.push('Time period is required for half-day leave');
+            const validPeriods = ['morning', 'afternoon'];
+            if (!validPeriods.includes(this.halfDayPeriod)) {
+                errors.push('Half day period must be morning or afternoon');
             }
-            if (!['morning', 'afternoon'].includes(this.halfDayPeriod)) {
-                errors.push('Invalid half-day period');
-            }
-        }
-
-        // Validate hours format
-        if (this.hours && (isNaN(this.hours) || this.hours < 0)) {
-            errors.push('Hours must be a valid positive number');
         }
 
         // Validate comments length
@@ -92,109 +66,279 @@ class WorkEntry {
             errors.push('Comments cannot exceed 500 characters');
         }
 
-        return {
-            isValid: errors.length === 0,
-            errors: errors
+        if (errors.length > 0) {
+            throw new Error(`Validation failed: ${errors.join(', ')}`);
+        }
+    }
+
+    /**
+     * Check if date string is valid
+     * @param {string} dateString - Date string to validate
+     * @returns {boolean} - Whether date is valid
+     */
+    isValidDate(dateString) {
+        const regex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!regex.test(dateString)) return false;
+        
+        const date = new Date(dateString);
+        const timestamp = date.getTime();
+        
+        if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) {
+            return false;
+        }
+        
+        return dateString === date.toISOString().split('T')[0];
+    }
+
+    /**
+     * Get entry type information
+     * @returns {Object} - Entry type details
+     */
+    getTypeInfo() {
+        const typeInfo = {
+            work: {
+                label: 'Work Entry',
+                color: '#2563eb',
+                icon: '💼',
+                description: 'Regular work hours'
+            },
+            fullLeave: {
+                label: 'Full Day Leave',
+                color: '#dc2626',
+                icon: '🏖️',
+                description: 'Full day absence'
+            },
+            halfLeave: {
+                label: 'Half Day Leave',
+                color: '#ea580c',
+                icon: '🌅',
+                description: 'Half day absence'
+            },
+            holiday: {
+                label: 'Holiday',
+                color: '#16a34a',
+                icon: '🎉',
+                description: 'Public holiday or company holiday'
+            }
+        };
+
+        return typeInfo[this.type] || {
+            label: this.type,
+            color: '#6b7280',
+            icon: '📝',
+            description: 'Custom entry type'
         };
     }
 
     /**
-     * Get hours for this entry based on type
+     * Get calculated hours based on entry type
      * @returns {number} - Hours for this entry
      */
     getHours() {
         switch (this.type) {
             case 'work':
-                return this.hours || 0;
-            case 'halfLeave':
-                return 4;
+                return this.hours;
             case 'fullLeave':
             case 'holiday':
-                return 8;
+                return 8; // Standard full day
+            case 'halfLeave':
+                return 4; // Standard half day
             default:
                 return 0;
         }
     }
 
     /**
-     * Update entry data
-     * @param {Object} data - New entry data
+     * Get entry display name
+     * @returns {string} - Display name for entry
      */
-    update(data) {
-        const allowedFields = [
-            'type', 'project', 'hours', 'halfDayPeriod', 'comments', 'date'
-        ];
+    getDisplayName() {
+        const typeInfo = this.getTypeInfo();
         
-        allowedFields.forEach(field => {
-            if (data.hasOwnProperty(field)) {
-                this[field] = data[field];
-            }
-        });
+        if (this.type === 'work' && this.project) {
+            return `${typeInfo.label} - ${this.project}`;
+        }
         
-        this.timestamp = new Date().toISOString();
+        if (this.type === 'halfLeave' && this.halfDayPeriod) {
+            const period = this.halfDayPeriod === 'morning' ? 'Morning' : 'Afternoon';
+            return `${typeInfo.label} (${period})`;
+        }
+        
+        return typeInfo.label;
     }
 
     /**
-     * Convert entry to plain object for storage
-     * @returns {Object} - Plain object representation
+     * Get formatted date
+     * @param {string} format - Date format (short, long, relative)
+     * @returns {string} - Formatted date
      */
-    toObject() {
+    getFormattedDate(format = 'short') {
+        const date = new Date(this.date);
+        
+        switch (format) {
+            case 'long':
+                return date.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            case 'relative':
+                const today = new Date();
+                const diffTime = date.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays === 0) return 'Today';
+                if (diffDays === -1) return 'Yesterday';
+                if (diffDays === 1) return 'Tomorrow';
+                if (diffDays > 1 && diffDays <= 7) return `In ${diffDays} days`;
+                if (diffDays < -1 && diffDays >= -7) return `${Math.abs(diffDays)} days ago`;
+                
+                return this.getFormattedDate('short');
+            case 'short':
+            default:
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+        }
+    }
+
+    /**
+     * Get day of week
+     * @returns {string} - Day of week name
+     */
+    getDayOfWeek() {
+        const date = new Date(this.date);
+        return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+
+    /**
+     * Check if entry is on weekend
+     * @returns {boolean} - Whether entry is on weekend
+     */
+    isWeekend() {
+        const date = new Date(this.date);
+        const dayOfWeek = date.getDay();
+        return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+    }
+
+    /**
+     * Get detailed entry information
+     * @returns {Object} - Detailed entry info
+     */
+    getDetailedInfo() {
         return {
             id: this.id,
             type: this.type,
+            typeInfo: this.getTypeInfo(),
+            date: this.date,
+            formattedDate: this.getFormattedDate('long'),
+            dayOfWeek: this.getDayOfWeek(),
+            isWeekend: this.isWeekend(),
+            project: this.project,
+            hours: this.getHours(),
+            actualHours: this.hours,
+            halfDayPeriod: this.halfDayPeriod,
+            comments: this.comments,
+            displayName: this.getDisplayName(),
+            timestamp: this.timestamp,
+            userId: this.userId
+        };
+    }
+
+    /**
+     * Convert entry to JSON
+     * @returns {Object} - JSON representation
+     */
+    toJSON() {
+        return {
+            id: this.id,
+            type: this.type,
+            date: this.date,
             project: this.project,
             hours: this.hours,
             halfDayPeriod: this.halfDayPeriod,
             comments: this.comments,
             timestamp: this.timestamp,
-            date: this.date
+            userId: this.userId
         };
     }
 
     /**
-     * Create WorkEntry from plain object
-     * @param {Object} obj - Plain object data
-     * @returns {WorkEntry} - New WorkEntry instance
+     * Update entry data
+     * @param {Object} updateData - Data to update
+     * @returns {WorkEntry} - Updated entry instance
      */
-    static fromObject(obj) {
-        return new WorkEntry(obj);
-    }
-
-    /**
-     * Generate unique ID
-     * @returns {string} - Unique identifier
-     */
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    }
-
-    /**
-     * Get entry type information
-     * @returns {Object} - Type configuration object
-     */
-    getTypeInfo() {
-        const entryTypes = WorkEntry.getEntryTypes();
-        return entryTypes[this.type] || entryTypes.work;
-    }
-
-    /**
-     * Get formatted display text for the entry
-     * @returns {string} - Display text
-     */
-    getDisplayText() {
-        const typeInfo = this.getTypeInfo();
-        let text = typeInfo.label;
+    update(updateData) {
+        const allowedFields = ['type', 'date', 'project', 'hours', 'halfDayPeriod', 'comments'];
         
-        if (this.project) {
-            text += ` - ${this.project}`;
+        allowedFields.forEach(field => {
+            if (updateData.hasOwnProperty(field)) {
+                this[field] = updateData[field];
+            }
+        });
+
+        // Update timestamp
+        this.timestamp = new Date().toISOString();
+        
+        // Re-validate
+        this.validate();
+        
+        return this;
+    }
+
+    /**
+     * Clone entry
+     * @param {Object} overrides - Fields to override in clone
+     * @returns {WorkEntry} - Cloned entry
+     */
+    clone(overrides = {}) {
+        const data = { ...this.toJSON(), ...overrides };
+        delete data.id; // Generate new ID
+        return new WorkEntry(data);
+    }
+
+    /**
+     * Check if entry conflicts with another entry on the same date
+     * @param {WorkEntry} otherEntry - Other entry to check against
+     * @returns {boolean} - Whether entries conflict
+     */
+    conflictsWith(otherEntry) {
+        if (this.date !== otherEntry.date) return false;
+        if (this.id === otherEntry.id) return false;
+
+        // Full day entries conflict with everything
+        if (this.type === 'fullLeave' || this.type === 'holiday' || 
+            otherEntry.type === 'fullLeave' || otherEntry.type === 'holiday') {
+            return true;
         }
-        
-        const hours = this.getHours();
-        if (hours > 0) {
-            text += ` (${hours}h)`;
+
+        // Half day conflicts with same period
+        if (this.type === 'halfLeave' && otherEntry.type === 'halfLeave') {
+            return this.halfDayPeriod === otherEntry.halfDayPeriod;
         }
-        
-        return text;
+
+        return false;
+    }
+
+    /**
+     * Calculate daily hours limit remaining
+     * @param {Array} otherEntriesForDate - Other entries for the same date
+     * @returns {number} - Remaining hours available
+     */
+    getRemainingDailyHours(otherEntriesForDate = []) {
+        const maxDailyHours = 8;
+        let usedHours = 0;
+
+        otherEntriesForDate.forEach(entry => {
+            if (entry.id !== this.id) {
+                usedHours += entry.getHours();
+            }
+        });
+
+        return Math.max(0, maxDailyHours - usedHours);
     }
 
     /**
@@ -203,86 +347,101 @@ class WorkEntry {
      */
     getSummary() {
         return {
-            id: this.id,
-            type: this.type,
-            typeLabel: this.getTypeInfo().label,
-            project: this.project,
-            hours: this.getHours(),
-            halfDayPeriod: this.halfDayPeriod,
-            comments: this.comments,
             date: this.date,
-            timestamp: this.timestamp
+            type: this.type,
+            typeName: this.getTypeInfo().label,
+            project: this.project || 'N/A',
+            hours: this.getHours(),
+            period: this.halfDayPeriod || 'Full Day',
+            weekend: this.isWeekend(),
+            hasComments: !!this.comments
         };
     }
 
     /**
-     * Clone entry
-     * @returns {WorkEntry} - Cloned entry
+     * Static method to create entry from CSV row
+     * @param {Array} csvRow - CSV row data
+     * @param {Array} headers - CSV headers
+     * @returns {WorkEntry} - New entry instance
      */
-    clone() {
-        const cloned = new WorkEntry(this.toObject());
-        cloned.id = this.generateId(); // Generate new ID for clone
-        return cloned;
+    static fromCSV(csvRow, headers) {
+        const data = {};
+        headers.forEach((header, index) => {
+            const value = csvRow[index];
+            
+            switch (header.toLowerCase()) {
+                case 'date':
+                    data.date = value;
+                    break;
+                case 'type':
+                case 'entry type':
+                    data.type = value.toLowerCase().replace(/\s+/g, '');
+                    break;
+                case 'project':
+                    data.project = value;
+                    break;
+                case 'hours':
+                    data.hours = parseFloat(value) || 0;
+                    break;
+                case 'period':
+                case 'half day period':
+                    data.halfDayPeriod = value.toLowerCase();
+                    break;
+                case 'comments':
+                    data.comments = value;
+                    break;
+            }
+        });
+
+        return new WorkEntry(data);
     }
 
     /**
-     * Check if entry is for a specific date
-     * @param {string} dateKey - Date key to check
-     * @returns {boolean} - Whether entry matches date
+     * Static method to validate multiple entries for conflicts
+     * @param {Array} entries - Array of WorkEntry instances
+     * @returns {Array} - Array of conflict descriptions
      */
-    isForDate(dateKey) {
-        return this.date === dateKey;
-    }
+    static findConflicts(entries) {
+        const conflicts = [];
+        const dateGroups = {};
 
-    /**
-     * Get entry age in days
-     * @returns {number} - Age in days
-     */
-    getAgeInDays() {
-        const entryDate = new Date(this.timestamp);
-        const now = new Date();
-        const diffTime = Math.abs(now - entryDate);
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    }
+        // Group entries by date
+        entries.forEach(entry => {
+            if (!dateGroups[entry.date]) {
+                dateGroups[entry.date] = [];
+            }
+            dateGroups[entry.date].push(entry);
+        });
 
-    /**
-     * Format entry for CSV export
-     * @returns {Array} - Array of values for CSV
-     */
-    toCsvRow() {
-        return [
-            this.date,
-            this.getTypeInfo().label,
-            this.project || 'N/A',
-            this.getHours(),
-            this.halfDayPeriod || 'N/A',
-            this.comments || 'N/A',
-            this.timestamp
-        ];
-    }
+        // Check each date for conflicts
+        Object.keys(dateGroups).forEach(date => {
+            const dateEntries = dateGroups[date];
+            
+            for (let i = 0; i < dateEntries.length; i++) {
+                for (let j = i + 1; j < dateEntries.length; j++) {
+                    if (dateEntries[i].conflictsWith(dateEntries[j])) {
+                        conflicts.push({
+                            date: date,
+                            entry1: dateEntries[i].getDisplayName(),
+                            entry2: dateEntries[j].getDisplayName(),
+                            reason: 'Time period conflict'
+                        });
+                    }
+                }
+            }
 
-    /**
-     * Get validation rules for entry type
-     * @returns {Object} - Validation rules
-     */
-    getValidationRules() {
-        const rules = {
-            type: { required: true },
-            hours: { min: 0, max: 8 },
-            comments: { maxLength: 500 }
-        };
+            // Check daily hours limit
+            const totalHours = dateEntries.reduce((sum, entry) => sum + entry.getHours(), 0);
+            if (totalHours > 8) {
+                conflicts.push({
+                    date: date,
+                    reason: `Exceeds 8-hour daily limit (${totalHours} hours)`,
+                    entries: dateEntries.map(e => e.getDisplayName())
+                });
+            }
+        });
 
-        if (this.type === 'work') {
-            rules.project = { required: true };
-            rules.hours.required = true;
-            rules.hours.min = 0.5;
-        }
-
-        if (this.type === 'halfLeave') {
-            rules.halfDayPeriod = { required: true };
-        }
-
-        return rules;
+        return conflicts;
     }
 }
 

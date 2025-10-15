@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Work Log Tracker - Object Oriented v2.0</title>
+    <meta name="description" content="Professional daily work log tracker with cloud sync, project management, and advanced analytics">
+    <meta name="keywords" content="work log, time tracking, project management, daily tracker">
+    <meta name="author" content="Work Log Tracker Team">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📊%3C/text%3E%3C/svg%3E">
+    
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="style.css" as="style">
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- Theme and Performance -->
+    <meta name="theme-color" content="#2180bd">
+    <meta name="color-scheme" content="light dark">
+    
+    <!-- Security -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;">
+    
+    <!-- Social Media -->
+    <meta property="og:title" content="Daily Work Log Tracker">
+    <meta property="og:description" content="Professional work log tracker with cloud sync">
+    <meta property="og:type" content="website">
+    
+    <!-- Performance Hints -->
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+</head>
+<body class="loading">
+    <!-- Skip Navigation Link for Accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator">
+        <div class="loading-spinner"></div>
+        <p>Loading Work Log Tracker...</p>
+        <small>Initializing application components...</small>
+    </div>
+
+    <!-- Authentication Screen -->
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h1>📊 Daily Work Log Tracker</h1>
+                <p>Professional time tracking with cloud synchronization</p>
+                <small class="version-info">Version 2.0 - Object-Oriented Architecture</small>
+            </div>
+
+            <!-- Auth Tabs -->
+            <div class="auth-tabs" role="tablist" aria-label="Authentication options">
+                <button id="loginTab" class="auth-tab active" role="tab" aria-selected="true" aria-controls="loginForm">
+                    Login
+                </button>
+                <button id="registerTab" class="auth-tab" role="tab" aria-selected="false" aria-controls="registerForm">
+                    Register
+                </button>
+                <button id="guestTab" class="auth-tab" role="tab" aria-selected="false" aria-controls="guestForm">
+                    Guest Mode
+                </button>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form" role="tabpanel" aria-labelledby="loginTab">
+                <div class="form-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Enter your email address" 
+                           required autocomplete="email" aria-describedby="loginErrors">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password" 
+                           required autocomplete="current-password" aria-describedby="loginErrors">
+                </div>
+                <div id="loginErrors" class="auth-errors" role="alert" aria-live="polite"></div>
+                <button id="loginBtn" class="btn btn--primary btn--full" type="button">
+                    <span class="btn-icon">🔑</span>
+                    <span class="btn-text">Sign In</span>
+                </button>
+                <p class="auth-hint">
+                    Don't have an account? Switch to <strong>Register</strong> tab above.
+                </p>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="auth-form hidden" role="tabpanel" aria-labelledby="registerTab">
+                <div class="form-group">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" placeholder="Enter your full name" 
+                           required autocomplete="name" aria-describedby="registerErrors">
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email Address</label>
+                    <input type="email" id="registerEmail" placeholder="Enter your email address" 
+                           required autocomplete="email" aria-describedby="registerErrors">
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" placeholder="Create a password (min 6 characters)" 
+                           required autocomplete="new-password" aria-describedby="registerErrors" 
+                           minlength="6" aria-describedby="passwordHelp">
+                    <small id="passwordHelp" class="form-help">
+                        Password must be at least 6 characters long
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" placeholder="Confirm your password" 
+                           required autocomplete="new-password" aria-describedby="registerErrors">
+                </div>
+                <div id="registerErrors" class="auth-errors" role="alert" aria-live="polite"></div>
+                <button id="registerBtn" class="btn btn--primary btn--full" type="button">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text">Create Account</span>
+                </button>
+                <p class="auth-hint">
+                    Already have an account? Switch to <strong>Login</strong> tab above.
+                </p>
+            </div>
+
+            <!-- Guest Form -->
+            <div id="guestForm" class="auth-form hidden" role="tabpanel" aria-labelledby="guestTab">
+                <div class="guest-info">
+                    <h3>Continue as Guest</h3>
+                    <p>Experience all features with local data storage only.</p>
+                    <div class="guest-features">
+                        <div class="feature-list">
+                            <h4>✅ Available Features:</h4>
+                            <ul class="guest-limitations">
+                                <li>✅ Full application functionality</li>
+                                <li>✅ Calendar and time tracking</li>
+                                <li>✅ Project management</li>
+                                <li>✅ Data export capabilities</li>
+                                <li>✅ Keyboard shortcuts</li>
+                                <li>✅ Responsive design</li>
+                            </ul>
+                        </div>
+                        <div class="limitations-list">
+                            <h4>⚠️ Limitations:</h4>
+                            <ul class="guest-limitations">
+                                <li>⚠️ Data stored locally only</li>
+                                <li>⚠️ No cross-device synchronization</li>
+                                <li>⚠️ Data may be lost if browser data is cleared</li>
+                                <li>⚠️ No cloud backup</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <button id="continueGuestBtn" class="btn btn--secondary btn--full" type="button">
+                    <span class="btn-icon">👤</span>
+                    <span class="btn-text">Continue as Guest</span>
+                </button>
+                <p class="auth-hint">
+                    Want cloud sync? Switch to <strong>Login</strong> or <strong>Register</strong> above.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-brand">
+                    <h1>📊 Work Log Tracker</h1>
+                    <small class="version">v2.0 OOP</small>
+                </div>
+                <div class="user-info">
+                    <div class="user-details">
+                        <span id="userWelcome" class="user-welcome">Welcome!</span>
+                        <span id="userMode" class="status status--info">Local Storage Only</span>
+                    </div>
+                    <div class="header-actions">
+                        <button id="exportBtn" class="btn btn--outline" aria-label="Export monthly data">
+                            <span class="btn-icon">📁</span>
+                            <span class="btn-text">Export Data</span>
+                        </button>
+                        <button id="manageProjectsBtn" class="btn btn--outline" aria-label="Manage projects">
+                            <span class="btn-icon">⚙️</span>
+                            <span class="btn-text">Manage Projects</span>
+                        </button>
+                        <button id="logoutBtn" class="btn btn--secondary" aria-label="Logout">
+                            <span class="btn-icon">👋</span>
+                            <span class="btn-text">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main id="main-content" class="main-content">
+            <!-- Calendar Section -->
+            <section class="calendar-section" aria-labelledby="calendar-heading">
+                <div class="section-header">
+                    <h2 id="calendar-heading">📅 Calendar View</h2>
+                    <p>Select a date to manage your work entries</p>
+                </div>
+
+                <!-- Month Navigation -->
+                <nav class="month-navigation" aria-label="Month navigation">
+                    <button id="prevMonthBtn" class="nav-btn" aria-label="Previous month">
+                        <span aria-hidden="true">‹</span>
+                    </button>
+                    <h3 id="currentMonth" class="current-month">October 2025</h3>
+                    <button id="nextMonthBtn" class="nav-btn" aria-label="Next month">
+                        <span aria-hidden="true">›</span>
+                    </button>
+                </nav>
+
+                <!-- Calendar Grid -->
+                <div class="calendar-container">
+                    <div class="calendar-weekdays" role="row">
+                        <div class="weekday" role="columnheader">Sun</div>
+                        <div class="weekday" role="columnheader">Mon</div>
+                        <div class="weekday" role="columnheader">Tue</div>
+                        <div class="weekday" role="columnheader">Wed</div>
+                        <div class="weekday" role="columnheader">Thu</div>
+                        <div class="weekday" role="columnheader">Fri</div>
+                        <div class="weekday" role="columnheader">Sat</div>
+                    </div>
+                    <div id="calendarGrid" class="calendar-grid" role="grid" aria-label="Calendar days">
+                        <!-- Calendar days will be generated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Entry Types Legend -->
+                <div class="entry-types-legend">
+                    <h4>Entry Types</h4>
+                    <div class="legend-items">
+                        <div class="legend-item">
+                            <span class="legend-color work" aria-hidden="true"></span>
+                            <span>Work Entry</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color fullLeave" aria-hidden="true"></span>
+                            <span>Full Day Leave</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color halfLeave" aria-hidden="true"></span>
+                            <span>Half Day Leave</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color holiday" aria-hidden="true"></span>
+                            <span>Holiday</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Entry Management Section -->
+            <section class="entry-section" aria-labelledby="entry-heading">
+                <!-- Selected Date Display -->
+                <div class="selected-date">
+                    <h3 id="entry-heading" class="selected-date-title">
+                        <span id="selectedDateDisplay">Please select a date</span>
+                    </h3>
+                    <div class="daily-stats">
+                        <span class="stat-item">
+                            Total Hours: <strong id="totalHours">0</strong>
+                        </span>
+                        <div id="validationWarning" class="validation-warning" role="alert" aria-live="polite"></div>
+                    </div>
+                </div>
+
+                <!-- Add New Entry Form -->
+                <form id="entryForm" class="entry-form" style="display: none;" novalidate>
+                    <div class="form-header">
+                        <h4>Add New Entry</h4>
+                        <p>Fill in the details for your work entry</p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="entryType">Entry Type *</label>
+                            <select id="entryType" required aria-describedby="entryTypeHelp">
+                                <option value="">Select entry type...</option>
+                                <option value="work">🔧 Work Entry</option>
+                                <option value="fullLeave">🏖️ Full Day Leave</option>
+                                <option value="halfLeave">⏰ Half Day Leave</option>
+                                <option value="holiday">🎉 Holiday</option>
+                            </select>
+                            <small id="entryTypeHelp" class="form-help">
+                                Choose the type of entry for this day
+                            </small>
+                        </div>
+                    </div>
+
+                    <div id="projectGroup" class="form-group" style="display: none;">
+                        <label for="project">Project *</label>
+                        <select id="project" aria-describedby="projectHelp">
+                            <option value="">Select project...</option>
+                        </select>
+                        <small id="projectHelp" class="form-help">
+                            Select the project you worked on
+                        </small>
+                    </div>
+
+                    <div id="hoursGroup" class="form-group" style="display: none;">
+                        <label for="hours">Hours *</label>
+                        <input type="number" id="hours" min="0.5" max="8" step="0.5" 
+                               placeholder="Enter hours (0.5 - 8)" aria-describedby="hoursHelp">
+                        <small id="hoursHelp" class="form-help">
+                            Hours worked (in 0.5 hour increments)
+                        </small>
+                    </div>
+
+                    <div id="halfDayPeriodGroup" class="form-group" style="display: none;">
+                        <label for="halfDayPeriod">Time Period *</label>
+                        <select id="halfDayPeriod" aria-describedby="halfDayHelp">
+                            <option value="">Select period...</option>
+                            <option value="morning">🌅 Morning (8:00 AM - 12:00 PM)</option>
+                            <option value="afternoon">🌆 Afternoon (1:00 PM - 5:00 PM)</option>
+                        </select>
+                        <small id="halfDayHelp" class="form-help">
+                            Choose which half of the day
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="comments">Comments</label>
+                        <textarea id="comments" rows="3" placeholder="Add any additional notes or descriptions..." 
+                                  maxlength="500" aria-describedby="commentsHelp"></textarea>
+                        <small id="commentsHelp" class="form-help">
+                            Optional notes about this entry (max 500 characters)
+                        </small>
+                    </div>
+
+                    <div id="formErrors" class="form-errors" role="alert" aria-live="polite"></div>
+
+                    <div class="form-actions">
+                        <button id="addEntryBtn" class="btn btn--primary" type="button">
+                            <span class="btn-icon">➕</span>
+                            <span class="btn-text">Add Entry</span>
+                        </button>
+                        <button id="cancelEntryBtn" class="btn btn--outline" type="button" style="display: none;">
+                            <span class="btn-icon">❌</span>
+                            <span class="btn-text">Cancel</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Daily Entries List -->
+                <div class="daily-entries">
+                    <h4 class="entries-header">
+                        Daily Entries 
+                        <span id="entriesCount" class="entries-count">0 entries</span>
+                    </h4>
+                    <div id="entriesList" class="entries-list" role="region" aria-label="Daily entries list">
+                        <div class="no-entries">
+                            <span class="no-entries-icon" aria-hidden="true">📝</span>
+                            <p>No entries for selected date</p>
+                            <span class="no-entries-hint">Select a date above to add your first entry</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Project Management Modal -->
+    <div id="projectModal" class="modal-overlay hidden" role="dialog" aria-labelledby="projectModalTitle" aria-modal="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="projectModalTitle">⚙️ Manage Projects</h3>
+                <button id="closeProjectModalBtn" class="close-btn" aria-label="Close project management dialog">
+                    <span aria-hidden="true">×</span>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Add New Project Form -->
+                <form class="project-form" novalidate>
+                    <h4>Add New Project</h4>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newProjectId">Project ID *</label>
+                            <input type="text" id="newProjectId" placeholder="e.g., WV-1112-4152" 
+                                   required maxlength="50" aria-describedby="projectIdHelp">
+                            <small id="projectIdHelp" class="form-help">
+                                Unique project identifier
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label for="newSubCode">Sub Code *</label>
+                            <input type="text" id="newSubCode" placeholder="e.g., 0210" 
+                                   required maxlength="20" aria-describedby="subCodeHelp">
+                            <small id="subCodeHelp" class="form-help">
+                                Project sub-code
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="newProjectTitle">Project Title *</label>
+                        <input type="text" id="newProjectTitle" placeholder="e.g., AS_Strategy" 
+                               required maxlength="100" aria-describedby="projectTitleHelp">
+                        <small id="projectTitleHelp" class="form-help">
+                            Descriptive project title
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="newProjectCategory">Category *</label>
+                        <select id="newProjectCategory" required aria-describedby="categoryHelp">
+                            <option value="">Select category...</option>
+                            <option value="Strategy">📋 Strategy</option>
+                            <option value="Development">💻 Development</option>
+                            <option value="Testing">🧪 Testing</option>
+                            <option value="Controller">🎛️ Controller</option>
+                            <option value="Tracking">📊 Tracking</option>
+                            <option value="Overhead">📈 Overhead</option>
+                            <option value="Research">🔬 Research</option>
+                            <option value="Maintenance">🔧 Maintenance</option>
+                            <option value="Documentation">📝 Documentation</option>
+                            <option value="Training">🎓 Training</option>
+                        </select>
+                        <small id="categoryHelp" class="form-help">
+                            Project category for organization
+                        </small>
+                    </div>
+                    
+                    <div id="projectFormErrors" class="form-errors" role="alert" aria-live="polite"></div>
+                    
+                    <button id="addProjectBtn" class="btn btn--primary" type="button">
+                        <span class="btn-icon">➕</span>
+                        <span class="btn-text">Add Project</span>
+                    </button>
+                </form>
+
+                <!-- Projects List -->
+                <div class="projects-list">
+                    <div class="projects-header">
+                        <h4>Existing Projects</h4>
+                        <span id="projectsCount" class="projects-count">0 projects</span>
+                    </div>
+                    <div id="projectsList" role="region" aria-label="Projects list">
+                        <!-- Projects will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="confirmModal" class="modal-overlay hidden" role="dialog" aria-labelledby="confirmModalTitle" aria-modal="true">
+        <div class="modal-content modal-content--small">
+            <div class="modal-header">
+                <h3 id="confirmModalTitle">🗑️ Confirm Delete</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">Are you sure you want to delete this item? This action cannot be undone.</p>
+                <div class="modal-actions">
+                    <button id="confirmDeleteBtn" class="btn btn--danger">
+                        <span class="btn-icon">🗑️</span>
+                        <span class="btn-text">Delete</span>
+                    </button>
+                    <button id="cancelDeleteBtn" class="btn btn--outline">
+                        <span class="btn-icon">❌</span>
+                        <span class="btn-text">Cancel</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden" role="alert" aria-live="polite" aria-atomic="true">
+        <div class="toast-content">
+            <span id="toastIcon" class="toast-icon" aria-hidden="true"></span>
+            <span id="toastMessage" class="toast-message"></span>
+            <button id="toastClose" class="toast-close" aria-label="Close notification">
+                <span aria-hidden="true">×</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help -->
+    <div id="shortcutsHelp" class="shortcuts-help hidden" role="dialog" aria-labelledby="shortcutsTitle" aria-modal="true">
+        <div class="shortcuts-content">
+            <div class="shortcuts-header">
+                <h3 id="shortcutsTitle">⌨️ Keyboard Shortcuts</h3>
+                <button class="close-btn" aria-label="Close shortcuts help">×</button>
+            </div>
+            <div class="shortcuts-body">
+                <div class="shortcuts-section">
+                    <h4>General</h4>
+                    <dl class="shortcuts-list">
+                        <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt>
+                        <dd>Save data</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd></dt>
+                        <dd>Export data</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></dt>
+                        <dd>Manage projects</dd>
+                        <dt><kbd>Esc</kbd></dt>
+                        <dd>Close modals</dd>
+                    </dl>
+                </div>
+                <div class="shortcuts-section">
+                    <h4>Calendar Navigation</h4>
+                    <dl class="shortcuts-list">
+                        <dt><kbd>Arrow Keys</kbd></dt>
+                        <dd>Navigate dates</dd>
+                        <dt><kbd>Home</kbd></dt>
+                        <dd>Go to first day of month</dd>
+                        <dt><kbd>End</kbd></dt>
+                        <dd>Go to last day of month</dd>
+                        <dt><kbd>Page Up/Down</kbd></dt>
+                        <dd>Navigate months</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Status Indicator -->
+    <div id="statusIndicator" class="status-indicator" aria-live="polite">
+        <span class="status-text">Ready</span>
+        <span class="status-sync" title="Sync status">💾</span>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script type="module" src="config/firebase.js" defer></script>
+    <script type="module" src="models/User.js" defer></script>
+    <script type="module" src="models/WorkEntry.js" defer></script>
+    <script type="module" src="models/Project.js" defer></script>
+    <script type="module" src="services/DataService.js" defer></script>
+    <script type="module" src="views/CalendarView.js" defer></script>
+    <script type="module" src="controllers/AuthController.js" defer></script>
+    <script type="module" src="controllers/EntryController.js" defer></script>
+    <script type="module" src="controllers/ProjectController.js" defer></script>
+    <script type="module" src="controllers/ToastController.js" defer></script>
+    <script type="module" src="main.js" defer></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+
+    <!-- Analytics (placeholder) -->
+    <script>
+        // Placeholder for analytics integration
+        window.trackEvent = function(event, data) {
+            console.log('Analytics:', event, data);
+        };
+    </script>
+
+    <!-- Critical CSS for Above-the-fold Content -->
+    <style>
+        /* Critical CSS inlined for faster loading */
+        .loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .skip-link {
+            position: absolute;
+            left: -10000px;
+            top: auto;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+        
+        .skip-link:focus {
+            position: static;
+            width: auto;
+            height: auto;
+            background: var(--color-primary);
+            color: white;
+            padding: 8px;
+            text-decoration: none;
+            z-index: 10000;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+
+    <!-- No-JS Fallback -->
+    <noscript>
+        <div style="padding: 2rem; max-width: 600px; margin: 2rem auto; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; text-align: center;">
+            <h2 style="color: #dc3545;">⚠️ JavaScript Required</h2>
+            <p>This application requires JavaScript to function properly.</p>
+            <p>Please enable JavaScript in your browser settings and refresh the page.</p>
+            <ul style="text-align: left; margin: 1rem 0;">
+                <li>Check your browser's JavaScript settings</li>
+                <li>Disable any JavaScript-blocking extensions</li>
+                <li>Ensure your browser is up to date</li>
+                <li>Try using a different browser</li>
+            </ul>
+        </div>
+    </noscript>
+</body>
+</html>

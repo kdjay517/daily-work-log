@@ -24,9 +24,6 @@
     <meta name="theme-color" content="#2180bd">
     <meta name="color-scheme" content="light dark">
     
-    <!-- Security -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;">
-    
     <!-- Social Media -->
     <meta property="og:title" content="Daily Work Log Tracker">
     <meta property="og:description" content="Professional work log tracker with cloud sync">
@@ -453,28 +450,6 @@
         </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div id="confirmModal" class="modal-overlay hidden" role="dialog" aria-labelledby="confirmModalTitle" aria-modal="true">
-        <div class="modal-content modal-content--small">
-            <div class="modal-header">
-                <h3 id="confirmModalTitle">🗑️ Confirm Delete</h3>
-            </div>
-            <div class="modal-body">
-                <p id="confirmMessage">Are you sure you want to delete this item? This action cannot be undone.</p>
-                <div class="modal-actions">
-                    <button id="confirmDeleteBtn" class="btn btn--danger">
-                        <span class="btn-icon">🗑️</span>
-                        <span class="btn-text">Delete</span>
-                    </button>
-                    <button id="cancelDeleteBtn" class="btn btn--outline">
-                        <span class="btn-icon">❌</span>
-                        <span class="btn-text">Cancel</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden" role="alert" aria-live="polite" aria-atomic="true">
         <div class="toast-content">
@@ -484,50 +459,6 @@
                 <span aria-hidden="true">×</span>
             </button>
         </div>
-    </div>
-
-    <!-- Keyboard Shortcuts Help -->
-    <div id="shortcutsHelp" class="shortcuts-help hidden" role="dialog" aria-labelledby="shortcutsTitle" aria-modal="true">
-        <div class="shortcuts-content">
-            <div class="shortcuts-header">
-                <h3 id="shortcutsTitle">⌨️ Keyboard Shortcuts</h3>
-                <button class="close-btn" aria-label="Close shortcuts help">×</button>
-            </div>
-            <div class="shortcuts-body">
-                <div class="shortcuts-section">
-                    <h4>General</h4>
-                    <dl class="shortcuts-list">
-                        <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt>
-                        <dd>Save data</dd>
-                        <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd></dt>
-                        <dd>Export data</dd>
-                        <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></dt>
-                        <dd>Manage projects</dd>
-                        <dt><kbd>Esc</kbd></dt>
-                        <dd>Close modals</dd>
-                    </dl>
-                </div>
-                <div class="shortcuts-section">
-                    <h4>Calendar Navigation</h4>
-                    <dl class="shortcuts-list">
-                        <dt><kbd>Arrow Keys</kbd></dt>
-                        <dd>Navigate dates</dd>
-                        <dt><kbd>Home</kbd></dt>
-                        <dd>Go to first day of month</dd>
-                        <dt><kbd>End</kbd></dt>
-                        <dd>Go to last day of month</dd>
-                        <dt><kbd>Page Up/Down</kbd></dt>
-                        <dd>Navigate months</dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- App Status Indicator -->
-    <div id="statusIndicator" class="status-indicator" aria-live="polite">
-        <span class="status-text">Ready</span>
-        <span class="status-sync" title="Sync status">💾</span>
     </div>
 
     <!-- JavaScript Modules -->
@@ -542,21 +473,6 @@
     <script type="module" src="controllers/ProjectController.js" defer></script>
     <script type="module" src="controllers/ToastController.js" defer></script>
     <script type="module" src="main.js" defer></script>
-
-    <!-- Service Worker Registration -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then((registration) => {
-                        console.log('SW registered: ', registration);
-                    })
-                    .catch((registrationError) => {
-                        console.log('SW registration failed: ', registrationError);
-                    });
-            });
-        }
-    </script>
 
     <!-- Analytics (placeholder) -->
     <script>

@@ -312,6 +312,31 @@ class CalendarView {
     }
 
     /**
+ * Get entry type classes for calendar days
+ */
+getEntryTypeClasses(entries) {
+    if (!entries || entries.length === 0) {
+        return '';
+    }
+
+    const entryTypes = new Set();
+    entries.forEach(entry => {
+        entryTypes.add(entry.type);
+    });
+
+    const typeArray = Array.from(entryTypes);
+    
+    if (typeArray.length === 1) {
+        return `has-${typeArray[0]}-entries`;
+    } else if (typeArray.length > 1) {
+        return 'has-mixed-entries';
+    }
+    
+    return 'has-entries';
+}
+
+
+    /**
      * Attach event listeners to day element
      * @param {HTMLElement} dayElement - Day element
      * @param {Date} date - Date for this day

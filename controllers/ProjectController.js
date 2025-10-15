@@ -1,14 +1,12 @@
 // controllers/ProjectController.js
-// Project Management Controller
+// Project Controller - Manages project creation, editing, and deletion
 
 class ProjectController {
     constructor(dataService) {
         this.dataService = dataService;
         this.elements = {};
         this.eventListeners = [];
-        this.searchTerm = '';
-        this.sortField = 'projectId';
-        this.sortOrder = 'asc';
+        this.editingProject = null;
         
         this.cacheElements();
         this.initialize();
@@ -19,26 +17,33 @@ class ProjectController {
      */
     cacheElements() {
         this.elements = {
-            // Modal and buttons
-            manageProjectsBtn: document.getElementById('manageProjectsBtn'),
+            // Project management modal
             projectModal: document.getElementById('projectModal'),
+            manageProjectsBtn: document.getElementById('manageProjectsBtn'),
             closeProjectModalBtn: document.getElementById('closeProjectModalBtn'),
             
-            // Form elements
+            // Project form elements
+            projectForm: document.getElementById('projectForm'),
             newProjectId: document.getElementById('newProjectId'),
             newSubCode: document.getElementById('newSubCode'),
             newProjectTitle: document.getElementById('newProjectTitle'),
             newProjectCategory: document.getElementById('newProjectCategory'),
             addProjectBtn: document.getElementById('addProjectBtn'),
+            cancelProjectBtn: document.getElementById('cancelProjectBtn'),
             
-            // Project list and search
+            // Project list
             projectsList: document.getElementById('projectsList'),
-            searchProjects: document.getElementById('searchProjects'),
-            sortProjects: document.getElementById('sortProjects'),
             projectsCount: document.getElementById('projectsCount'),
             
-            // Form validation
-            projectFormErrors: document.getElementById('projectFormErrors')
+            // Project dropdown (for entries)
+            projectDropdown: document.getElementById('project'),
+            
+            // Search and filters
+            projectSearch: document.getElementById('projectSearch'),
+            categoryFilter: document.getElementById('categoryFilter'),
+            
+            // Error display
+            projectErrors: document.getElementById('projectErrors')
         };
     }
 
@@ -47,64 +52,79 @@ class ProjectController {
      */
     initialize() {
         this.setupEventListeners();
-        this.initializeDefaultProjects();
-        this.setupKeyboardShortcuts();
+        this.renderProjectsList();
+        this.updateProjectDropdown();
+        console.log('ProjectController: Initialized successfully');
     }
 
     /**
-     * Set up event listeners
+     * Setup event listeners
      */
     setupEventListeners() {
-        // Modal controls
-        this.addEventListenerWithCleanup(this.elements.manageProjectsBtn, 'click', () => {
-            this.showProjectModal();
-        });
+        // Modal management
+        if (this.elements.manageProjectsBtn) {
+            this.addEventListenerWithCleanup(this.elements.manageProjectsBtn, 'click', () => {
+                this.showProjectModal();
+            });
+        }
 
-        this.addEventListenerWithCleanup(this.elements.closeProjectModalBtn, 'click', () => {
-            this.hideProjectModal();
-        });
-
-        // Add project
-        this.addEventListenerWithCleanup(this.elements.addProjectBtn, 'click', async () => {
-            await this.handleAddProject();
-        });
-
-        // Form validation on input
-        this.setupFormValidation();
-
-        // Search and sort
-        this.addEventListenerWithCleanup(this.elements.searchProjects, 'input', () => {
-            this.handleSearch();
-        });
-
-        this.addEventListenerWithCleanup(this.elements.sortProjects, 'change', () => {
-            this.handleSort();
-        });
-
-        // Modal overlay click to close
-        this.addEventListenerWithCleanup(document, 'click', (e) => {
-            if (e.target.classList.contains('modal-overlay')) {
+        if (this.elements.closeProjectModalBtn) {
+            this.addEventListenerWithCleanup(this.elements.closeProjectModalBtn, 'click', () => {
                 this.hideProjectModal();
-            }
+            });
+        }
+
+        // Form submission
+        if (this.elements.addProjectBtn) {
+            this.addEventListenerWithCleanup(this.elements.addProjectBtn, 'click', async () => {
+                await this.handleAddProject();
+            });
+        }
+
+        if (this.elements.cancelProjectBtn) {
+            this.addEventListenerWithCleanup(this.elements.cancelProjectBtn, 'click', () => {
+                this.cancelEdit();
+            });
+        }
+
+        // Search and filter
+        if (this.elements.projectSearch) {
+            this.addEventListenerWithCleanup(this.elements.projectSearch, 'input', () => {
+                this.filterProjects();
+            });
+        }
+
+        if (this.elements.categoryFilter) {
+            this.addEventListenerWithCleanup(this.elements.categoryFilter, 'change', () => {
+                this.filterProjects();
+            });
+        }
+
+        // Modal overlay click
+        if (this.elements.projectModal) {
+            this.addEventListenerWithCleanup(this.elements.projectModal, 'click', (e) => {
+                if (e.target === this.elements.projectModal) {
+                    this.hideProjectModal();
+                }
+            });
+        }
+
+        // Listen for data changes
+        document.addEventListener('data:updated', () => {
+            this.renderProjectsList();
+            this.updateProjectDropdown();
         });
 
-        // Form submission on Enter
-        this.addEventListenerWithCleanup(this.elements.projectModal, 'keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                this.handleAddProject();
-            }
+        document.addEventListener('projects:updated', () => {
+            this.renderProjectsList();
+            this.updateProjectDropdown();
         });
 
-        // Real-time duplicate checking
-        this.setupDuplicateChecking();
+        console.log('ProjectController: Event listeners set up');
     }
 
     /**
      * Add event listener with cleanup tracking
-     * @param {HTMLElement} element - Element to attach listener to
-     * @param {string} event - Event type
-     * @param {Function} handler - Event handler
      */
     addEventListenerWithCleanup(element, event, handler) {
         if (element) {
@@ -114,313 +134,164 @@ class ProjectController {
     }
 
     /**
-     * Set up form validation
-     */
-    setupFormValidation() {
-        // Project ID validation
-        this.addEventListenerWithCleanup(this.elements.newProjectId, 'blur', () => {
-            this.validateProjectId();
-        });
-
-        this.addEventListenerWithCleanup(this.elements.newProjectId, 'input', () => {
-            this.formatProjectId();
-        });
-
-        // Sub code validation
-        this.addEventListenerWithCleanup(this.elements.newSubCode, 'blur', () => {
-            this.validateSubCode();
-        });
-
-        this.addEventListenerWithCleanup(this.elements.newSubCode, 'input', () => {
-            this.formatSubCode();
-        });
-
-        // Project title validation
-        this.addEventListenerWithCleanup(this.elements.newProjectTitle, 'blur', () => {
-            this.validateProjectTitle();
-        });
-
-        // Category validation
-        this.addEventListenerWithCleanup(this.elements.newProjectCategory, 'change', () => {
-            this.validateCategory();
-        });
-    }
-
-    /**
-     * Set up duplicate checking
-     */
-    setupDuplicateChecking() {
-        const checkDuplicates = () => {
-            this.checkForDuplicates();
-        };
-
-        this.addEventListenerWithCleanup(this.elements.newProjectId, 'input', checkDuplicates);
-        this.addEventListenerWithCleanup(this.elements.newSubCode, 'input', checkDuplicates);
-    }
-
-    /**
-     * Set up keyboard shortcuts
-     */
-    setupKeyboardShortcuts() {
-        this.addEventListenerWithCleanup(document, 'keydown', (e) => {
-            // Ctrl/Cmd + Shift + P to open project manager
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
-                e.preventDefault();
-                this.showProjectModal();
-            }
-
-            // Escape to close modal
-            if (e.key === 'Escape' && !this.elements.projectModal.classList.contains('hidden')) {
-                this.hideProjectModal();
-            }
-        });
-    }
-
-    /**
-     * Initialize with default projects if none exist
-     */
-    async initializeDefaultProjects() {
-        if (this.dataService.getProjects().length === 0) {
-            try {
-                const Project = (await import('../models/Project.js')).default;
-                const defaultProjects = Project.getDefaultProjects();
-                this.dataService.setProjects(defaultProjects.map(p => p.toObject()));
-                console.log('Default projects initialized');
-            } catch (error) {
-                console.error('Error initializing default projects:', error);
-            }
-        }
-    }
-
-    /**
      * Show project management modal
      */
     showProjectModal() {
-        if (!this.elements.projectModal) return;
-        
-        this.elements.projectModal.classList.remove('hidden');
-        this.renderProjectsList();
-        this.updateProjectsCount();
-        this.clearProjectForm();
-        
-        // Focus first input
-        setTimeout(() => {
-            if (this.elements.newProjectId) {
-                this.elements.newProjectId.focus();
-            }
-        }, 100);
-
-        // Dispatch event
-        this.dispatchEvent('projectModalOpened');
+        if (this.elements.projectModal) {
+            this.elements.projectModal.classList.remove('hidden');
+            this.renderProjectsList();
+            this.clearForm();
+        }
     }
 
     /**
      * Hide project management modal
      */
     hideProjectModal() {
-        if (!this.elements.projectModal) return;
-        
-        this.elements.projectModal.classList.add('hidden');
-        this.clearProjectForm();
-        this.hideFormErrors();
-
-        // Dispatch event
-        this.dispatchEvent('projectModalClosed');
+        if (this.elements.projectModal) {
+            this.elements.projectModal.classList.add('hidden');
+            this.cancelEdit();
+        }
     }
 
     /**
-     * Render projects list
-     */
-    async renderProjectsList() {
-        if (!this.elements.projectsList) return;
-
-        let projects = this.dataService.getProjects();
-
-        // Apply search filter
-        if (this.searchTerm) {
-            try {
-                const Project = (await import('../models/Project.js')).default;
-                projects = Project.search(projects, this.searchTerm);
-            } catch (error) {
-                console.error('Error applying search filter:', error);
-            }
-        }
-
-        // Apply sorting
-        try {
-            const Project = (await import('../models/Project.js')).default;
-            projects = Project.sort(projects, this.sortField, this.sortOrder);
-        } catch (error) {
-            console.error('Error applying sort:', error);
-        }
-
-        if (projects.length === 0) {
-            const message = this.searchTerm ? 
-                `No projects found matching "${this.searchTerm}"` : 
-                'No projects available';
-            this.elements.projectsList.innerHTML = `
-                <div class="no-entries">
-                    <span class="no-entries-icon">📁</span>
-                    <p>${message}</p>
-                </div>
-            `;
-            return;
-        }
-
-        this.elements.projectsList.innerHTML = projects
-            .map(projectData => this.createProjectItemHTML(projectData))
-            .join('');
-    }
-
-    /**
-     * Create HTML for project item
-     * @param {Object} projectData - Project data
-     * @returns {string} - HTML string
-     */
-    createProjectItemHTML(projectData) {
-        const isUsed = this.dataService.isProjectInUse(projectData.id);
-        const usageClass = isUsed ? 'project-item--in-use' : '';
-        const deleteDisabled = isUsed ? 'disabled' : '';
-        const createdDate = new Date(projectData.createdAt).toLocaleDateString();
-        
-        return `
-            <div class="project-item ${usageClass}" data-project-id="${projectData.id}">
-                <div class="project-info">
-                    <div class="project-header">
-                        <h5>${projectData.projectId} (${projectData.subCode})</h5>
-                        <div class="project-badges">
-                            ${projectData.isActive ? 
-                                '<span class="badge badge--success">Active</span>' : 
-                                '<span class="badge badge--inactive">Inactive</span>'
-                            }
-                            ${isUsed ? '<span class="badge badge--info">In Use</span>' : ''}
-                        </div>
-                    </div>
-                    
-                    <div class="project-details">
-                        <p class="project-title">${this.escapeHtml(projectData.projectTitle)}</p>
-                        <div class="project-meta">
-                            <span class="meta-item">
-                                <strong>Category:</strong> ${projectData.category}
-                            </span>
-                            <span class="meta-item">
-                                <strong>Usage:</strong> ${projectData.usageCount || 0} times
-                            </span>
-                            <span class="meta-item">
-                                <strong>Created:</strong> ${createdDate}
-                            </span>
-                        </div>
-                        ${projectData.description ? `
-                            <p class="project-description">${this.escapeHtml(projectData.description)}</p>
-                        ` : ''}
-                    </div>
-                </div>
-                
-                <div class="project-actions">
-                    <button class="btn btn--sm btn--outline"
-                            onclick="window.projectController.editProject('${projectData.id}')"
-                            aria-label="Edit project">
-                        📝 Edit
-                    </button>
-                    
-                    <button class="btn btn--sm btn--outline"
-                            onclick="window.projectController.toggleProjectStatus('${projectData.id}')"
-                            aria-label="${projectData.isActive ? 'Deactivate' : 'Activate'} project">
-                        ${projectData.isActive ? '⏸️ Deactivate' : '▶️ Activate'}
-                    </button>
-                    
-                    <button class="btn btn--sm btn--outline"
-                            onclick="window.projectController.deleteProject('${projectData.id}')"
-                            style="color: var(--color-error);"
-                            ${deleteDisabled}
-                            aria-label="Delete project">
-                        🗑️ Delete
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-
-    /**
-     * Handle adding new project
+     * Handle add/update project
      */
     async handleAddProject() {
-        const projectData = this.gatherFormData();
-        
-        // Validate form data
-        if (!this.validateForm(projectData)) {
-            return;
-        }
-
         try {
-            const Project = (await import('../models/Project.js')).default;
-            const project = new Project(projectData);
-
-            // Validate project model
-            const validation = project.validate();
-            if (!validation.isValid) {
-                this.showFormErrors(validation.errors);
+            // Validate form
+            if (!this.validateForm()) {
                 return;
             }
 
-            // Check for duplicates
-            const projects = this.dataService.getProjects();
-            const isDuplicate = Project.isDuplicate(projects, project.projectId, project.subCode);
-            
-            if (isDuplicate) {
-                this.showFormErrors(['Project with this ID and sub code already exists']);
-                return;
+            // Gather form data
+            const projectData = this.gatherFormData();
+
+            // Add or update project
+            if (this.editingProject) {
+                await this.updateProject(projectData);
+            } else {
+                await this.addProject(projectData);
             }
 
-            // Add project to data service
-            this.dataService.addProject(project.toObject());
-
-            // Save data
-            const saveResult = await this.dataService.saveData();
-            this.showToast(saveResult.message || 'Project saved');
-
-            // Update UI
+            // Reset form and refresh display
+            this.clearForm();
             this.renderProjectsList();
-            this.updateProjectsCount();
-            this.clearProjectForm();
-            this.updateDropdowns();
-            this.showToast('✅ Project added successfully');
-
-            // Focus back to first input for rapid entry
-            if (this.elements.newProjectId) {
-                this.elements.newProjectId.focus();
-            }
+            this.updateProjectDropdown();
 
         } catch (error) {
-            console.error('Error adding project:', error);
-            this.showFormErrors(['Error adding project. Please try again.']);
+            console.error('Error handling project:', error);
+            this.showFormErrors([error.message]);
         }
     }
 
     /**
-     * Edit existing project
-     * @param {string} projectId - Project ID to edit
+     * Add new project
+     * @param {Object} projectData - Project data
+     */
+    async addProject(projectData) {
+        await this.dataService.addProject(projectData);
+        this.showToast('✅ Project added successfully');
+        
+        // Dispatch event
+        document.dispatchEvent(new CustomEvent('projects:updated'));
+    }
+
+    /**
+     * Update existing project
+     * @param {Object} projectData - Project data
+     */
+    async updateProject(projectData) {
+        await this.dataService.updateProject(this.editingProject.id, projectData);
+        this.showToast('✅ Project updated successfully');
+        this.cancelEdit();
+        
+        // Dispatch event
+        document.dispatchEvent(new CustomEvent('projects:updated'));
+    }
+
+    /**
+     * Edit project
+     * @param {string} projectId - Project ID
      */
     editProject(projectId) {
-        const project = this.dataService.findProject(projectId);
+        const projects = this.dataService.getProjects();
+        const project = projects.find(p => p.id === projectId);
+        
         if (!project) {
             this.showToast('❌ Project not found');
             return;
         }
 
-        // Populate form with project data
-        if (this.elements.newProjectId) this.elements.newProjectId.value = project.projectId;
-        if (this.elements.newSubCode) this.elements.newSubCode.value = project.subCode;
-        if (this.elements.newProjectTitle) this.elements.newProjectTitle.value = project.projectTitle;
-        if (this.elements.newProjectCategory) this.elements.newProjectCategory.value = project.category;
+        this.editingProject = project;
+        this.populateFormWithProject(project);
+        this.updateFormUIForEditing();
+        this.showToast('📝 Edit mode activated');
+    }
 
-        // Update button for editing mode
+    /**
+     * Populate form with project data
+     * @param {Object} project - Project to edit
+     */
+    populateFormWithProject(project) {
+        if (this.elements.newProjectId) this.elements.newProjectId.value = project.projectId || '';
+        if (this.elements.newSubCode) this.elements.newSubCode.value = project.subCode || '';
+        if (this.elements.newProjectTitle) this.elements.newProjectTitle.value = project.projectTitle || '';
+        if (this.elements.newProjectCategory) this.elements.newProjectCategory.value = project.category || '';
+    }
+
+    /**
+     * Update form UI for editing mode
+     */
+    updateFormUIForEditing() {
         if (this.elements.addProjectBtn) {
             this.elements.addProjectBtn.textContent = 'Update Project';
-            this.elements.addProjectBtn.setAttribute('data-editing-id', projectId);
+        }
+        if (this.elements.cancelProjectBtn) {
+            this.elements.cancelProjectBtn.style.display = 'inline-block';
+        }
+    }
+
+    /**
+     * Cancel edit mode
+     */
+    cancelEdit() {
+        this.editingProject = null;
+        this.clearForm();
+        this.showToast('✅ Edit cancelled');
+    }
+
+    /**
+     * Delete project
+     * @param {string} projectId - Project ID
+     */
+    async deleteProject(projectId) {
+        const projects = this.dataService.getProjects();
+        const project = projects.find(p => p.id === projectId);
+        
+        if (!project) {
+            this.showToast('❌ Project not found');
+            return;
         }
 
-        this.showToast('📝 Edit mode activated');
+        const confirmMessage = `Are you sure you want to delete project "${project.projectTitle}"?\n\nThis action cannot be undone.`;
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            await this.dataService.deleteProject(projectId);
+            this.renderProjectsList();
+            this.updateProjectDropdown();
+            this.showToast('✅ Project deleted successfully');
+            
+            // Dispatch event
+            document.dispatchEvent(new CustomEvent('projects:updated'));
+            
+        } catch (error) {
+            console.error('Error deleting project:', error);
+            this.showToast(`❌ ${error.message}`);
+        }
     }
 
     /**
@@ -428,101 +299,41 @@ class ProjectController {
      * @param {string} projectId - Project ID
      */
     async toggleProjectStatus(projectId) {
-        const project = this.dataService.findProject(projectId);
+        const projects = this.dataService.getProjects();
+        const project = projects.find(p => p.id === projectId);
+        
         if (!project) {
             this.showToast('❌ Project not found');
             return;
         }
 
         try {
-            // Update project status
-            project.isActive = !project.isActive;
-            project.updatedAt = new Date().toISOString();
-
-            this.dataService.updateProject(projectId, project);
-
-            // Save data
-            const saveResult = await this.dataService.saveData();
-            this.showToast(saveResult.message || 'Project updated');
-
-            // Update UI
-            this.renderProjectsList();
-            this.updateDropdowns();
+            await this.dataService.updateProject(projectId, {
+                isActive: !project.isActive
+            });
             
-            const statusText = project.isActive ? 'activated' : 'deactivated';
-            this.showToast(`✅ Project ${statusText} successfully`);
-
-        } catch (error) {
-            console.error('Error updating project status:', error);
-            this.showToast('❌ Error updating project status');
-        }
-    }
-
-    /**
-     * Delete project
-     * @param {string} projectId - Project ID to delete
-     */
-    async deleteProject(projectId) {
-        const project = this.dataService.findProject(projectId);
-        if (!project) {
-            this.showToast('❌ Project not found');
-            return;
-        }
-
-        // Check if project is in use
-        const isInUse = this.dataService.isProjectInUse(projectId);
-        if (isInUse) {
-            this.showToast('❌ Cannot delete project that is used in entries');
-            return;
-        }
-
-        // Confirm deletion
-        const projectName = `${project.projectId} (${project.subCode}) - ${project.projectTitle}`;
-        const confirmDelete = confirm(
-            `Are you sure you want to delete this project?\n\n${projectName}\n\nThis action cannot be undone.`
-        );
-        
-        if (!confirmDelete) return;
-
-        try {
-            this.dataService.deleteProject(projectId);
-
-            // Save data
-            const saveResult = await this.dataService.saveData();
-            this.showToast(saveResult.message || 'Project deleted');
-
-            // Update UI
             this.renderProjectsList();
-            this.updateProjectsCount();
-            this.updateDropdowns();
-            this.showToast('🗑️ Project deleted successfully');
-
+            this.updateProjectDropdown();
+            
+            const status = project.isActive ? 'deactivated' : 'activated';
+            this.showToast(`✅ Project ${status} successfully`);
+            
+            // Dispatch event
+            document.dispatchEvent(new CustomEvent('projects:updated'));
+            
         } catch (error) {
-            console.error('Error deleting project:', error);
-            this.showToast('❌ Error deleting project');
+            console.error('Error toggling project status:', error);
+            this.showToast('❌ Failed to update project status');
         }
     }
 
     /**
-     * Handle search input
+     * Find project by value (projectId-subCode)
+     * @param {string} projectValue - Project value
+     * @returns {Object|null} - Project object or null
      */
-    handleSearch() {
-        this.searchTerm = this.elements.searchProjects?.value?.trim() || '';
-        this.renderProjectsList();
-        this.updateProjectsCount();
-    }
-
-    /**
-     * Handle sort change
-     */
-    handleSort() {
-        const sortValue = this.elements.sortProjects?.value || 'projectId:asc';
-        const [field, order] = sortValue.split(':');
-        
-        this.sortField = field;
-        this.sortOrder = order;
-        
-        this.renderProjectsList();
+    findProjectByValue(projectValue) {
+        return this.dataService.findProjectByValue(projectValue);
     }
 
     /**
@@ -540,32 +351,40 @@ class ProjectController {
 
     /**
      * Validate form data
-     * @param {Object} data - Form data
      * @returns {boolean} - Whether form is valid
      */
-    validateForm(data) {
+    validateForm() {
         const errors = [];
+        const projectData = this.gatherFormData();
 
-        if (!data.projectId) {
+        // Validate required fields
+        if (!projectData.projectId) {
             errors.push('Project ID is required');
-        } else if (data.projectId.length > 50) {
-            errors.push('Project ID cannot exceed 50 characters');
         }
-
-        if (!data.subCode) {
+        if (!projectData.subCode) {
             errors.push('Sub code is required');
-        } else if (data.subCode.length > 20) {
-            errors.push('Sub code cannot exceed 20 characters');
         }
-
-        if (!data.projectTitle) {
+        if (!projectData.projectTitle) {
             errors.push('Project title is required');
-        } else if (data.projectTitle.length > 100) {
-            errors.push('Project title cannot exceed 100 characters');
+        }
+        if (!projectData.category) {
+            errors.push('Category is required');
         }
 
-        if (!data.category) {
-            errors.push('Category is required');
+        // Validate field formats
+        if (projectData.projectId && !/^[A-Z0-9\-]+$/i.test(projectData.projectId)) {
+            errors.push('Project ID can only contain letters, numbers, and hyphens');
+        }
+        if (projectData.subCode && !/^[A-Z0-9]+$/i.test(projectData.subCode)) {
+            errors.push('Sub code can only contain letters and numbers');
+        }
+
+        // Check for duplicates (only when adding new project)
+        if (!this.editingProject) {
+            const existing = this.findProjectByValue(`${projectData.projectId}-${projectData.subCode}`);
+            if (existing) {
+                errors.push('Project with this ID and sub code already exists');
+            }
         }
 
         if (errors.length > 0) {
@@ -577,169 +396,206 @@ class ProjectController {
         return true;
     }
 
-    // Individual field validation methods
-
     /**
-     * Validate project ID field
+     * Render projects list
      */
-    validateProjectId() {
-        const value = this.elements.newProjectId?.value?.trim() || '';
-        const isValid = value.length > 0 && value.length <= 50;
+    renderProjectsList() {
+        if (!this.elements.projectsList) return;
+
+        const projects = this.dataService.getProjects();
         
-        if (this.elements.newProjectId) {
-            this.elements.newProjectId.classList.toggle('invalid', !isValid);
+        if (projects.length === 0) {
+            this.elements.projectsList.innerHTML = `
+                <div class="no-projects">
+                    <p>No projects available</p>
+                    <small>Add your first project using the form above</small>
+                </div>
+            `;
+            this.updateProjectsCount(0);
+            return;
         }
-    }
 
-    /**
-     * Format project ID (uppercase, remove spaces)
-     */
-    formatProjectId() {
-        if (this.elements.newProjectId) {
-            let value = this.elements.newProjectId.value.toUpperCase().replace(/\s+/g, '');
-            this.elements.newProjectId.value = value;
-        }
-    }
-
-    /**
-     * Validate sub code field
-     */
-    validateSubCode() {
-        const value = this.elements.newSubCode?.value?.trim() || '';
-        const isValid = value.length > 0 && value.length <= 20;
-        
-        if (this.elements.newSubCode) {
-            this.elements.newSubCode.classList.toggle('invalid', !isValid);
-        }
-    }
-
-    /**
-     * Format sub code (remove spaces)
-     */
-    formatSubCode() {
-        if (this.elements.newSubCode) {
-            let value = this.elements.newSubCode.value.replace(/\s+/g, '');
-            this.elements.newSubCode.value = value;
-        }
-    }
-
-    /**
-     * Validate project title field
-     */
-    validateProjectTitle() {
-        const value = this.elements.newProjectTitle?.value?.trim() || '';
-        const isValid = value.length > 0 && value.length <= 100;
-        
-        if (this.elements.newProjectTitle) {
-            this.elements.newProjectTitle.classList.toggle('invalid', !isValid);
-        }
-    }
-
-    /**
-     * Validate category field
-     */
-    validateCategory() {
-        const value = this.elements.newProjectCategory?.value || '';
-        const isValid = value.length > 0;
-        
-        if (this.elements.newProjectCategory) {
-            this.elements.newProjectCategory.classList.toggle('invalid', !isValid);
-        }
-    }
-
-    /**
-     * Check for duplicate projects
-     */
-    async checkForDuplicates() {
-        const projectId = this.elements.newProjectId?.value?.trim() || '';
-        const subCode = this.elements.newSubCode?.value?.trim() || '';
-        
-        if (projectId && subCode) {
-            const projects = this.dataService.getProjects();
-            const editingId = this.elements.addProjectBtn?.getAttribute('data-editing-id');
-            
-            try {
-                const Project = (await import('../models/Project.js')).default;
-                const isDuplicate = Project.isDuplicate(projects, projectId, subCode, editingId);
-                
-                if (isDuplicate) {
-                    this.showFormErrors(['Project with this ID and sub code already exists']);
-                } else {
-                    this.hideFormErrors();
-                }
-            } catch (error) {
-                console.error('Error checking duplicates:', error);
+        // Sort projects by usage count and name
+        const sortedProjects = projects.sort((a, b) => {
+            if (a.isActive !== b.isActive) {
+                return b.isActive - a.isActive; // Active projects first
             }
+            return (b.usageCount || 0) - (a.usageCount || 0); // Then by usage count
+        });
+
+        const projectsHTML = sortedProjects.map(project => this.createProjectHTML(project)).join('');
+        this.elements.projectsList.innerHTML = projectsHTML;
+        this.updateProjectsCount(projects.length);
+    }
+
+    /**
+     * Create HTML for single project
+     * @param {Object} project - Project object
+     * @returns {string} - HTML string
+     */
+    createProjectHTML(project) {
+        const categoryInfo = this.getCategoryInfo(project.category);
+        const statusClass = project.isActive ? 'active' : 'inactive';
+        const statusIcon = project.isActive ? '✅' : '⚠️';
+
+        return `
+            <div class="project-item ${statusClass}" data-project-id="${project.id}">
+                <div class="project-header">
+                    <div class="project-info">
+                        <h5>${project.projectId} ${project.subCode}</h5>
+                        <p>${project.projectTitle}</p>
+                        <div class="project-meta">
+                            <span class="project-category">
+                                ${categoryInfo.icon} ${project.category}
+                            </span>
+                            <span class="project-usage">
+                                Used ${project.usageCount || 0} times
+                            </span>
+                            <span class="project-status">
+                                ${statusIcon} ${project.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="project-actions">
+                        <button class="btn btn--sm btn--outline" onclick="window.projectController.editProject('${project.id}')" title="Edit project">
+                            ✏️ Edit
+                        </button>
+                        <button class="btn btn--sm btn--outline" onclick="window.projectController.toggleProjectStatus('${project.id}')" title="Toggle active status">
+                            ${project.isActive ? '⏸️ Deactivate' : '▶️ Activate'}
+                        </button>
+                        <button class="btn btn--sm btn--outline" onclick="window.projectController.deleteProject('${project.id}')" style="color: var(--color-error)" title="Delete project">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Get category information
+     * @param {string} category - Category name
+     * @returns {Object} - Category info
+     */
+    getCategoryInfo(category) {
+        const categories = {
+            'Strategy': { icon: '📋', color: '#3b82f6' },
+            'Development': { icon: '💻', color: '#22c55e' },
+            'Testing': { icon: '🧪', color: '#f59e0b' },
+            'Controller': { icon: '🎛️', color: '#8b5cf6' },
+            'Tracking': { icon: '📊', color: '#06b6d4' },
+            'Overhead': { icon: '📈', color: '#6b7280' },
+            'Research': { icon: '🔬', color: '#ec4899' },
+            'Maintenance': { icon: '🔧', color: '#f97316' },
+            'Documentation': { icon: '📝', color: '#84cc16' },
+            'Training': { icon: '🎓', color: '#ef4444' }
+        };
+        return categories[category] || { icon: '📂', color: '#6b7280' };
+    }
+
+    /**
+     * Update projects count display
+     * @param {number} count - Number of projects
+     */
+    updateProjectsCount(count) {
+        if (this.elements.projectsCount) {
+            this.elements.projectsCount.textContent = `${count} ${count === 1 ? 'project' : 'projects'}`;
         }
+    }
+
+    /**
+     * Update project dropdown in entry form
+     */
+    updateProjectDropdown() {
+        if (!this.elements.projectDropdown) return;
+
+        const projects = this.dataService.getProjects();
+        const activeProjects = projects.filter(p => p.isActive);
+
+        // Store current selection
+        const currentValue = this.elements.projectDropdown.value;
+
+        // Clear existing options
+        this.elements.projectDropdown.innerHTML = '<option value="">Select project...</option>';
+
+        // Add project options sorted by usage count
+        activeProjects
+            .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
+            .forEach(project => {
+                const option = document.createElement('option');
+                option.value = `${project.projectId}-${project.subCode}`;
+                option.textContent = `${project.projectId} ${project.subCode} - ${project.projectTitle}`;
+                option.dataset.projectTitle = project.projectTitle;
+                option.dataset.category = project.category;
+                this.elements.projectDropdown.appendChild(option);
+            });
+
+        // Restore selection if it still exists
+        if (currentValue && activeProjects.find(p => `${p.projectId}-${p.subCode}` === currentValue)) {
+            this.elements.projectDropdown.value = currentValue;
+        }
+    }
+
+    /**
+     * Filter projects based on search and category
+     */
+    filterProjects() {
+        const searchTerm = this.elements.projectSearch?.value?.toLowerCase() || '';
+        const categoryFilter = this.elements.categoryFilter?.value || '';
+
+        const projectItems = document.querySelectorAll('.project-item');
+        
+        projectItems.forEach(item => {
+            const projectId = item.dataset.projectId;
+            const projects = this.dataService.getProjects();
+            const project = projects.find(p => p.id === projectId);
+            
+            if (!project) return;
+
+            let show = true;
+
+            // Apply search filter
+            if (searchTerm) {
+                const searchableText = `
+                    ${project.projectId} ${project.subCode} ${project.projectTitle} ${project.category}
+                `.toLowerCase();
+                show = show && searchableText.includes(searchTerm);
+            }
+
+            // Apply category filter
+            if (categoryFilter) {
+                show = show && project.category === categoryFilter;
+            }
+
+            item.style.display = show ? 'block' : 'none';
+        });
     }
 
     /**
      * Clear project form
      */
-    clearProjectForm() {
+    clearForm() {
         if (this.elements.newProjectId) this.elements.newProjectId.value = '';
         if (this.elements.newSubCode) this.elements.newSubCode.value = '';
         if (this.elements.newProjectTitle) this.elements.newProjectTitle.value = '';
         if (this.elements.newProjectCategory) this.elements.newProjectCategory.value = '';
-        
-        // Reset button
-        if (this.elements.addProjectBtn) {
-            this.elements.addProjectBtn.textContent = 'Add Project';
-            this.elements.addProjectBtn.removeAttribute('data-editing-id');
-        }
 
-        // Clear validation states
-        const inputs = [
-            this.elements.newProjectId,
-            this.elements.newSubCode,
-            this.elements.newProjectTitle,
-            this.elements.newProjectCategory
-        ];
-        
-        inputs.forEach(input => {
-            if (input) {
-                input.classList.remove('invalid');
-            }
-        });
+        // Reset UI state
+        if (this.elements.addProjectBtn) this.elements.addProjectBtn.textContent = 'Add Project';
+        if (this.elements.cancelProjectBtn) this.elements.cancelProjectBtn.style.display = 'none';
 
+        this.editingProject = null;
         this.hideFormErrors();
     }
 
     /**
-     * Update projects count display
-     */
-    updateProjectsCount() {
-        if (!this.elements.projectsCount) return;
-
-        const totalProjects = this.dataService.getProjects().length;
-        const activeProjects = this.dataService.getProjects().filter(p => p.isActive).length;
-        
-        this.elements.projectsCount.textContent = 
-            `${totalProjects} total (${activeProjects} active)`;
-    }
-
-    /**
-     * Update dropdowns in other components
-     */
-    updateDropdowns() {
-        this.dispatchEvent('projectsUpdated', {
-            projects: this.dataService.getProjects()
-        });
-    }
-
-    /**
      * Show form errors
-     * @param {Array} errors - Error messages
+     * @param {Array} errors - Array of error messages
      */
     showFormErrors(errors) {
-        if (this.elements.projectFormErrors) {
-            this.elements.projectFormErrors.innerHTML = errors.join('<br>');
-            this.elements.projectFormErrors.classList.add('show');
-            
-            // Auto-hide after 8 seconds
-            setTimeout(() => {
-                this.hideFormErrors();
-            }, 8000);
+        if (this.elements.projectErrors) {
+            this.elements.projectErrors.innerHTML = errors.join('<br>');
+            this.elements.projectErrors.classList.add('show');
         }
     }
 
@@ -747,33 +603,9 @@ class ProjectController {
      * Hide form errors
      */
     hideFormErrors() {
-        if (this.elements.projectFormErrors) {
-            this.elements.projectFormErrors.classList.remove('show');
+        if (this.elements.projectErrors) {
+            this.elements.projectErrors.classList.remove('show');
         }
-    }
-
-    /**
-     * Escape HTML to prevent XSS
-     * @param {string} text - Text to escape
-     * @returns {string} - Escaped text
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    /**
-     * Dispatch custom event
-     * @param {string} eventName - Event name
-     * @param {*} data - Event data
-     */
-    dispatchEvent(eventName, data = null) {
-        const event = new CustomEvent(`projects:${eventName}`, {
-            detail: data,
-            bubbles: true
-        });
-        document.dispatchEvent(event);
     }
 
     /**
@@ -787,36 +619,50 @@ class ProjectController {
         document.dispatchEvent(event);
     }
 
-    // Public API methods
-
     /**
      * Get all projects
-     * @returns {Array} - Projects array
+     * @returns {Array} - Array of projects
      */
     getProjects() {
         return this.dataService.getProjects();
     }
 
     /**
-     * Find project by ID
-     * @param {string} projectId - Project ID
-     * @returns {Object|null} - Project object
+     * Get active projects only
+     * @returns {Array} - Array of active projects
      */
-    findProject(projectId) {
-        return this.dataService.findProject(projectId);
+    getActiveProjects() {
+        return this.dataService.getProjects().filter(p => p.isActive);
     }
 
     /**
-     * Find project by value
-     * @param {string} value - Project value
-     * @returns {Object|null} - Project object
+     * Export projects to CSV
+     * @returns {string} - CSV content
      */
-    findProjectByValue(value) {
-        return this.dataService.findProjectByValue(value);
+    exportProjectsToCSV() {
+        const projects = this.dataService.getProjects();
+        const headers = ['Project ID', 'Sub Code', 'Project Title', 'Category', 'Usage Count', 'Is Active', 'Created At'];
+        
+        const csvRows = [headers.join(',')];
+        
+        projects.forEach(project => {
+            const row = [
+                project.projectId,
+                project.subCode,
+                `"${project.projectTitle.replace(/"/g, '""')}"`,
+                project.category,
+                project.usageCount || 0,
+                project.isActive ? 'Yes' : 'No',
+                project.createdAt ? new Date(project.createdAt).toLocaleDateString() : ''
+            ];
+            csvRows.push(row.join(','));
+        });
+
+        return csvRows.join('\n');
     }
 
     /**
-     * Cleanup resources
+     * Cleanup event listeners
      */
     destroy() {
         this.eventListeners.forEach(({ element, event, handler }) => {

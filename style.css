@@ -1890,6 +1890,82 @@ select {
 .entry-type-indicator.holiday {
   background-color: var(--color-success);
 }
+/* Entry Types Color Fix - CORRECTED COLORS */
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.legend-color.work {
+  background-color: #2563eb !important; /* Blue for Work Entry */
+}
+
+.legend-color.fullLeave {
+  background-color: #dc2626 !important; /* Red for Full Day Leave */
+}
+
+.legend-color.halfLeave {
+  background-color: #ea580c !important; /* Orange for Half Day Leave */
+}
+
+.legend-color.holiday {
+  background-color: #16a34a !important; /* Green for Holiday */
+}
+
+/* Entry Type Indicators in Entry Items */
+.entry-type-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.entry-type-indicator.work {
+  background-color: #2563eb !important; /* Blue */
+}
+
+.entry-type-indicator.fullLeave {
+  background-color: #dc2626 !important; /* Red */
+}
+
+.entry-type-indicator.halfLeave {
+  background-color: #ea580c !important; /* Orange */  
+}
+
+.entry-type-indicator.holiday {
+  background-color: #16a34a !important; /* Green */
+}
+
+/* Calendar Day Entry Indicators */
+.calendar-day.has-work-entries::after {
+  background-color: #2563eb !important; /* Blue */
+}
+
+.calendar-day.has-fullLeave-entries::after {
+  background-color: #dc2626 !important; /* Red */
+}
+
+.calendar-day.has-halfLeave-entries::after {
+  background-color: #ea580c !important; /* Orange */
+}
+
+.calendar-day.has-holiday-entries::after {
+  background-color: #16a34a !important; /* Green */
+}
+
+.calendar-day.has-mixed-entries::after {
+  background: conic-gradient(
+    #2563eb 0deg 90deg,      /* Blue */
+    #dc2626 90deg 180deg,    /* Red */
+    #ea580c 180deg 270deg,   /* Orange */
+    #16a34a 270deg 360deg    /* Green */
+  ) !important;
+}
+
 
 /* Modal - Enhanced Design */
 .modal-overlay {

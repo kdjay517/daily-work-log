@@ -1,4 +1,4 @@
-// views/CalendarView.js
+// views/CalendarView.js - UPDATED WITH ENTRY TYPE COLORS FIX
 // Calendar View Controller and Renderer
 
 class CalendarView {
@@ -235,7 +235,7 @@ class CalendarView {
     }
 
     /**
-     * Apply CSS classes to day element
+     * Apply CSS classes to day element - UPDATED WITH ENTRY TYPE COLOR FIX
      * @param {HTMLElement} dayElement - Day element
      * @param {Object} props - Day properties
      */
@@ -253,14 +253,15 @@ class CalendarView {
             dayElement.classList.add('selected');
         }
 
+        // ✅ FIXED: Entry type classes for colored indicators
         if (hasEntries) {
             dayElement.classList.add('has-entries');
             
-            // Add entry type indicators
-            const entryTypes = this.getEntryTypesForDate(entries);
-            entryTypes.forEach(type => {
-                dayElement.classList.add(`has-${type}`);
-            });
+            // Get entry type classes for proper coloring
+            const entryTypeClasses = this.getEntryTypeClasses(entries);
+            if (entryTypeClasses) {
+                dayElement.classList.add(entryTypeClasses);
+            }
 
             // Add data attribute for entry count
             dayElement.setAttribute('data-entry-count', entries.length);
@@ -288,15 +289,8 @@ class CalendarView {
             
             const entryTypes = this.getEntryTypesForDate(entries);
             if (entryTypes.length > 0) {
-                const WorkEntry = window.WorkEntry || { getEntryTypes: () => ({
-                    work: { label: 'Work Entry' },
-                    fullLeave: { label: 'Full Day Leave' },
-                    halfLeave: { label: 'Half Day Leave' },
-                    holiday: { label: 'Holiday' }
-                })};
-                
                 const entryTypeLabels = entryTypes.map(type => {
-                    const typeInfo = WorkEntry.getEntryTypes()[type];
+                    const typeInfo = this.getEntryTypeInfo(type);
                     return typeInfo ? typeInfo.label : type;
                 });
                 
@@ -312,29 +306,48 @@ class CalendarView {
     }
 
     /**
- * Get entry type classes for calendar days
- */
-getEntryTypeClasses(entries) {
-    if (!entries || entries.length === 0) {
-        return '';
+     * ✅ NEW: Get entry type classes for calendar day indicators
+     * @param {Array} entries - Array of entries for the day
+     * @returns {string} - CSS classes for entry types
+     */
+    getEntryTypeClasses(entries) {
+        if (!entries || entries.length === 0) {
+            return '';
+        }
+
+        const entryTypes = new Set();
+        entries.forEach(entry => {
+            entryTypes.add(entry.type);
+        });
+
+        const typeArray = Array.from(entryTypes);
+        
+        if (typeArray.length === 1) {
+            // Single entry type - use specific color class
+            return `has-${typeArray[0]}-entries`;
+        } else if (typeArray.length > 1) {
+            // Multiple entry types - use mixed color indicator
+            return 'has-mixed-entries';
+        }
+        
+        return 'has-entries';
     }
 
-    const entryTypes = new Set();
-    entries.forEach(entry => {
-        entryTypes.add(entry.type);
-    });
-
-    const typeArray = Array.from(entryTypes);
-    
-    if (typeArray.length === 1) {
-        return `has-${typeArray[0]}-entries`;
-    } else if (typeArray.length > 1) {
-        return 'has-mixed-entries';
+    /**
+     * ✅ NEW: Get entry type information
+     * @param {string} type - Entry type
+     * @returns {Object} - Entry type information
+     */
+    getEntryTypeInfo(type) {
+        const entryTypes = {
+            work: { label: 'Work Entry', color: '#2563eb' },
+            fullLeave: { label: 'Full Day Leave', color: '#dc2626' },
+            halfLeave: { label: 'Half Day Leave', color: '#ea580c' },
+            holiday: { label: 'Holiday', color: '#16a34a' }
+        };
+        
+        return entryTypes[type] || { label: type, color: '#6b7280' };
     }
-    
-    return 'has-entries';
-}
-
 
     /**
      * Attach event listeners to day element
@@ -605,6 +618,58 @@ getEntryTypeClasses(entries) {
             selectedDate: this.getSelectedDate(),
             currentMonth: this.getCurrentDate()
         };
+    }
+
+    /**
+     * ✅ NEW: Get entry type summary for tooltip
+     * @param {Array} entries - Entries for a date
+     * @returns {string} - Summary string
+     */
+    getEntryTypeSummary(entries) {
+        if (!entries || entries.length === 0) {
+            return 'No entries';
+        }
+
+        const typeCounts = {};
+        entries.forEach(entry => {
+            typeCounts[entry.type] = (typeCounts[entry.type] || 0) + 1;
+        });
+
+        const summary = Object.entries(typeCounts)
+            .map(([type, count]) => {
+                const typeInfo = this.getEntryTypeInfo(type);
+                return `${count} ${typeInfo.label}${count > 1 ? 's' : ''}`;
+            })
+            .join(', ');
+
+        return `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}: ${summary}`;
+    }
+
+    /**
+     * ✅ NEW: Set calendar day tooltip with entry information
+     * @param {HTMLElement} dayElement - Day element
+     * @param {Date} date - Date for this day
+     * @param {Array} entries - Entries for this date
+     */
+    setDayTooltip(dayElement, date, entries) {
+        const dateString = date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        });
+
+        let tooltip = dateString;
+        
+        if (entries.length > 0) {
+            tooltip += '\n' + this.getEntryTypeSummary(entries);
+        }
+
+        if (this.isDateToday(date)) {
+            tooltip += '\n(Today)';
+        }
+
+        dayElement.setAttribute('title', tooltip);
     }
 
     /**

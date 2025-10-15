@@ -201,109 +201,198 @@ class CalendarView {
      * @param {number} currentMonth - Current month being displayed
      * @returns {HTMLElement} - Calendar day element
      */
-    createCalendarDay(date, currentMonth) {
-        const dayElement = document.createElement('div');
-        dayElement.className = 'calendar-day';
-        dayElement.textContent = date.getDate();
-        dayElement.setAttribute('tabindex', '0');
-        dayElement.setAttribute('role', 'button');
-        
-        const dateKey = this.formatDateKey(date);
-        const isCurrentMonth = date.getMonth() === currentMonth;
-        const isToday = this.isDateToday(date);
-        const isSelected = this.selectedDate && this.formatDateKey(this.selectedDate) === dateKey;
-        const entries = this.dataService.getEntriesForDate(dateKey);
-        const hasEntries = entries.length > 0;
+/**
+ * Enhanced createCalendarDay method with weekend detection
+ * ADD this method to your CalendarView class OR update existing createCalendarDay method
+ */
+createCalendarDayWithWeekends(date, currentMonth) {
+    const dayElement = document.createElement('div');
+    dayElement.className = 'calendar-day';
+    dayElement.textContent = date.getDate();
+    dayElement.setAttribute('tabindex', '0');
+    dayElement.setAttribute('role', 'button');
+    
+    const dateKey = this.formatDateKey(date);
+    const isCurrentMonth = date.getMonth() === currentMonth;
+    const isToday = this.isDateToday(date);
+    const isSelected = this.selectedDate && this.formatDateKey(this.selectedDate) === dateKey;
+    const entries = this.dataService.getEntriesForDate(dateKey);
+    const hasEntries = entries.length > 0;
+    
+    // ✅ NEW: Weekend detection
+    const isWeekend = this.isWeekend(date);
+    const isSaturday = date.getDay() === 6;
+    const isSunday = date.getDay() === 0;
 
-        // Apply CSS classes based on date properties
-        this.applyDayClasses(dayElement, {
-            isCurrentMonth,
-            isToday,
-            isSelected,
-            hasEntries,
-            entries,
-            dateKey
-        });
+    // Apply CSS classes based on date properties
+    this.applyDayClasses(dayElement, {
+        isCurrentMonth,
+        isToday,
+        isSelected,
+        hasEntries,
+        entries,
+        dateKey,
+        isWeekend,      // ✅ NEW
+        isSaturday,     // ✅ NEW  
+        isSunday        // ✅ NEW
+    });
 
-        // Set up accessibility attributes
-        this.setDayAccessibility(dayElement, date, entries);
+    // Set up accessibility attributes with weekend info
+    this.setDayAccessibility(dayElement, date, entries, isWeekend);
 
-        // Add event listeners
-        this.attachDayEventListeners(dayElement, date);
+    // Add event listeners
+    this.attachDayEventListeners(dayElement, date);
 
-        return dayElement;
-    }
+    return dayElement;
+}
 
     /**
      * Apply CSS classes to day element - UPDATED WITH ENTRY TYPE COLOR FIX
      * @param {HTMLElement} dayElement - Day element
      * @param {Object} props - Day properties
      */
-    applyDayClasses(dayElement, { isCurrentMonth, isToday, isSelected, hasEntries, entries, dateKey }) {
-        // Basic state classes
-        if (!isCurrentMonth) {
-            dayElement.classList.add('other-month');
+/**
+ * Enhanced applyDayClasses method with weekend styling
+ * ADD this method to your CalendarView class OR update existing applyDayClasses method
+ */
+applyDayClassesWithWeekends(dayElement, { isCurrentMonth, isToday, isSelected, hasEntries, entries, dateKey, isWeekend, isSaturday, isSunday }) {
+    // Basic state classes
+    if (!isCurrentMonth) {
+        dayElement.classList.add('other-month');
+    }
+
+    if (isToday) {
+        dayElement.classList.add('today');
+    }
+
+    if (isSelected) {
+        dayElement.classList.add('selected');
+    }
+
+    // ✅ NEW: Weekend classes
+    if (isWeekend) {
+        dayElement.classList.add('weekend');
+        
+        if (isSaturday) {
+            dayElement.classList.add('saturday');
         }
-
-        if (isToday) {
-            dayElement.classList.add('today');
-        }
-
-        if (isSelected) {
-            dayElement.classList.add('selected');
-        }
-
-        // ✅ FIXED: Entry type classes for colored indicators
-        if (hasEntries) {
-            dayElement.classList.add('has-entries');
-            
-            // Get entry type classes for proper coloring
-            const entryTypeClasses = this.getEntryTypeClasses(entries);
-            if (entryTypeClasses) {
-                dayElement.classList.add(entryTypeClasses);
-            }
-
-            // Add data attribute for entry count
-            dayElement.setAttribute('data-entry-count', entries.length);
+        
+        if (isSunday) {
+            dayElement.classList.add('sunday');
         }
     }
 
+    // Entry type classes (existing logic)
+    if (hasEntries) {
+        dayElement.classList.add('has-entries');
+        
+        // Get entry type classes for proper coloring
+        const entryTypeClasses = this.getEntryTypeClasses(entries);
+        if (entryTypeClasses) {
+            dayElement.classList.add(entryTypeClasses);
+        }
+
+        // Add data attribute for entry count
+        dayElement.setAttribute('data-entry-count', entries.length);
+    }
+}
     /**
      * Set accessibility attributes for day element
      * @param {HTMLElement} dayElement - Day element
      * @param {Date} date - Date for this day
      * @param {Array} entries - Entries for this date
      */
-    setDayAccessibility(dayElement, date, entries) {
-        const dateString = date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-        });
 
-        let ariaLabel = dateString;
-        
-        if (entries.length > 0) {
-            ariaLabel += `. ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
-            
-            const entryTypes = this.getEntryTypesForDate(entries);
-            if (entryTypes.length > 0) {
-                const entryTypeLabels = entryTypes.map(type => {
-                    const typeInfo = this.getEntryTypeInfo(type);
-                    return typeInfo ? typeInfo.label : type;
-                });
-                
-                ariaLabel += `: ${entryTypeLabels.join(', ')}`;
-            }
-        }
+/**
+ * ✅ NEW: Check if date is weekend
+ * ADD this method to your CalendarView class
+ */
+isWeekend(date) {
+    const dayOfWeek = date.getDay();
+    return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+}
 
-        if (this.isDateToday(date)) {
-            ariaLabel += '. Today';
-        }
+/**
+ * Enhanced setDayAccessibility method with weekend info
+ * ADD this method to your CalendarView class OR update existing setDayAccessibility method
+ */
+setDayAccessibilityWithWeekends(dayElement, date, entries, isWeekend) {
+    const dateString = date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    });
 
-        dayElement.setAttribute('aria-label', ariaLabel);
+    let ariaLabel = dateString;
+    let tooltip = dateString;
+    
+    // ✅ NEW: Add weekend information
+    if (isWeekend) {
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+        ariaLabel += `, Weekend (${dayName})`;
+        tooltip += `\n🏖️ Weekend (${dayName})`;
     }
+    
+    if (entries.length > 0) {
+        ariaLabel += `. ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
+        
+        const entryTypes = this.getEntryTypesForDate(entries);
+        if (entryTypes.length > 0) {
+            const entryTypeLabels = entryTypes.map(type => {
+                const typeInfo = this.getEntryTypeInfo(type);
+                return typeInfo ? typeInfo.label : type;
+            });
+            
+            ariaLabel += `: ${entryTypeLabels.join(', ')}`;
+            tooltip += `\n📝 ${entryTypeLabels.join(', ')}`;
+        }
+    } else if (isWeekend) {
+        tooltip += '\nNo entries logged for this weekend day';
+    }
+
+    if (this.isDateToday(date)) {
+        ariaLabel += '. Today';
+        tooltip += '\n⭐ Today';
+    }
+
+    dayElement.setAttribute('aria-label', ariaLabel);
+    dayElement.setAttribute('title', tooltip);
+}
+
+    /**
+ * ✅ NEW: Get weekend statistics for analytics
+ * ADD this method to your CalendarView class
+ */
+getWeekendStats(month = new Date()) {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    
+    let weekends = 0;
+    let saturdays = 0;
+    let sundays = 0;
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, monthIndex, day);
+        const dayOfWeek = date.getDay();
+        
+        if (dayOfWeek === 0) { // Sunday
+            weekends++;
+            sundays++;
+        } else if (dayOfWeek === 6) { // Saturday  
+            weekends++;
+            saturdays++;
+        }
+    }
+    
+    return {
+        totalWeekends: weekends,
+        saturdays: saturdays,
+        sundays: sundays,
+        workingDays: daysInMonth - weekends
+    };
+}
 
     /**
      * ✅ NEW: Get entry type classes for calendar day indicators

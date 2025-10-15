@@ -1,4 +1,4 @@
-// controllers/EntryController.js
+// controllers/EntryController.js - FIXED Export Issue
 // Entry Management Controller - Handles work entry CRUD operations
 
 class EntryController {
@@ -312,7 +312,7 @@ class EntryController {
                 const project = this.dataService.findProjectByValue(projectValue);
                 if (project) {
                     // This will be handled when the entry is actually saved
-                    console.log('Project selected:', project.getDisplayName());
+                    console.log('Project selected:', this.getProjectDisplayName(projectValue));
                 }
             }
         }
@@ -868,15 +868,28 @@ class EntryController {
     }
 
     /**
-     * Get project display name
+     * Get project display name - FIXED VERSION
      * @param {string} projectValue - Project value
      * @returns {string} - Display name
      */
     getProjectDisplayName(projectValue) {
         if (!projectValue) return 'N/A';
         
+        // Try to find project from data service
         const project = this.dataService.findProjectByValue(projectValue);
-        return project ? project.getDisplayName() : projectValue;
+        
+        if (project) {
+            // Handle both Project instances and plain objects
+            if (typeof project.getDisplayName === 'function') {
+                return project.getDisplayName();
+            } else {
+                // For plain objects, construct display name manually
+                return `${project.projectId} (${project.subCode}) - ${project.projectTitle}`;
+            }
+        }
+        
+        // Fallback to the raw value if project not found
+        return projectValue;
     }
 
     /**

@@ -738,557 +738,323 @@ select.form-control {
 }
 
 /* END PERPLEXITY DESIGN SYSTEM */
-/* Enhanced Dashboard Layout - Add these styles to your style.css file */
+/* Enhanced Legend Styling - Add to your style.css */
 
-/* Main Dashboard Grid Layout */
-.main-dashboard {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto auto auto;
-  gap: var(--space-24);
-  padding: 0;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* Calendar Section - Takes 2 columns */
-.calendar-section {
-  grid-column: 1 / -1;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-card-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-24);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Daily Entry Section - Right column */
-.daily-entry-section {
-  grid-column: 2;
-  grid-row: 2;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-card-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-24);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Monthly Summary Section - Left column */
-.monthly-summary-section {
-  grid-column: 1;
-  grid-row: 2;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-card-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-24);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Historical Data Section - Left column */
-.historical-data-section {
-  grid-column: 1;
-  grid-row: 3;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-card-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-24);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Export Section - Right column */
-.export-section {
-  grid-column: 2;
-  grid-row: 3;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-card-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-24);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Calendar Legend */
-.calendar-legend {
-  display: flex;
-  gap: var(--space-20);
-  margin-bottom: var(--space-16);
-  padding: var(--space-12);
-  background: var(--color-bg-1);
-  border-radius: var(--radius-base);
-  flex-wrap: wrap;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-}
-
-.legend-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.legend-indicator.work-logged {
-  background-color: var(--color-primary);
-}
-
-.legend-indicator.today {
-  background-color: var(--color-warning);
-}
-
-.legend-indicator.holiday-leave {
-  background-color: var(--color-error);
-}
-
-/* Monthly Summary Cards */
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-16);
-}
-
-.summary-card {
-  background: var(--color-bg-1);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-base);
-  padding: var(--space-20);
-  text-align: center;
-  transition: all var(--duration-fast) var(--ease-standard);
-}
-
-.summary-card:hover {
-  background: var(--color-bg-2);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-2px);
-}
-
-.summary-value {
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-primary);
-  margin-bottom: var(--space-8);
-  line-height: 1;
-}
-
-.summary-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  font-weight: var(--font-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-}
-
-/* Historical Data List */
-.historical-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.historical-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-12);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-base);
-  margin-bottom: var(--space-8);
-  transition: all var(--duration-fast) var(--ease-standard);
-}
-
-.historical-item:hover {
-  background: var(--color-bg-1);
-  box-shadow: var(--shadow-sm);
-}
-
-.historical-period {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-
-.historical-stats {
-  display: flex;
-  gap: var(--space-16);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.historical-stat {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-/* Export Grid */
-.export-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-16);
-}
-
-.export-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-16);
-  padding: var(--space-16);
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-base);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-standard);
-  text-align: left;
-  font-family: var(--font-family-base);
-  color: var(--color-text);
-}
-
-.export-btn:hover {
-  background: var(--color-bg-1);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-2px);
-}
-
-.export-btn:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.export-icon {
-  font-size: var(--font-size-2xl);
-  flex-shrink: 0;
-  color: var(--color-primary);
-}
-
-.export-content h4 {
-  margin: 0 0 var(--space-4) 0;
-  color: var(--color-text);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-}
-
-.export-content p {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.export-status {
-  margin-top: var(--space-16);
-  text-align: center;
-}
-
-.guest-notice {
-  color: var(--color-warning);
-  font-size: var(--font-size-sm);
-  font-style: italic;
-  padding: var(--space-8) var(--space-12);
-  background: rgba(var(--color-warning-rgb), 0.1);
-  border: 1px solid rgba(var(--color-warning-rgb), 0.2);
-  border-radius: var(--radius-base);
-}
-
-/* Analytics Modal */
-.modal-content--large {
-  max-width: 900px;
-  width: 95%;
-}
-
-.analytics-tabs {
-  display: flex;
-  border-bottom: 2px solid var(--color-border);
-  margin-bottom: var(--space-24);
-  border-radius: var(--radius-base) var(--radius-base) 0 0;
-  overflow: hidden;
-}
-
-.analytics-tab {
-  flex: 1;
-  padding: var(--space-12) var(--space-16);
-  background: var(--color-secondary);
-  border: none;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-standard);
-  border-bottom: 3px solid transparent;
-  font-family: var(--font-family-base);
-}
-
-.analytics-tab.active {
-  color: var(--color-primary);
-  background: var(--color-surface);
-  border-bottom-color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.analytics-tab:hover:not(.active) {
-  color: var(--color-text);
-  background: var(--color-secondary-hover);
-}
-
-.analytics-tab:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.analytics-content {
-  min-height: 400px;
-}
-
-/* Export Modal Options */
-.export-options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-20);
-}
-
-.export-actions {
-  display: flex;
-  gap: var(--space-12);
-  justify-content: flex-end;
-  margin-top: var(--space-20);
-}
-
-/* Enhanced Header Actions */
-.header-actions {
-  display: flex;
-  gap: var(--space-8);
-  flex-wrap: wrap;
-}
-
-.header-actions .btn {
-  white-space: nowrap;
-}
-
-/* Responsive Design for Enhanced Dashboard */
-@media (max-width: 1200px) {
-  .main-dashboard {
-    grid-template-columns: 1fr;
-    gap: var(--space-20);
-  }
-  
-  .calendar-section,
-  .daily-entry-section,
-  .monthly-summary-section,
-  .historical-data-section,
-  .export-section {
-    grid-column: 1;
-  }
-  
-  .daily-entry-section {
-    grid-row: 3;
-  }
-  
-  .monthly-summary-section {
-    grid-row: 2;
-  }
-  
-  .historical-data-section {
-    grid-row: 4;
-  }
-  
-  .export-section {
-    grid-row: 5;
-  }
-}
-
-@media (max-width: 768px) {
-  .summary-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .export-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .header-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-  
-  .header-actions .btn {
-    justify-content: center;
-  }
-  
-  .calendar-legend {
-    flex-direction: column;
-    gap: var(--space-8);
-  }
-  
-  .main-dashboard {
-    padding: 0 var(--space-16);
-    gap: var(--space-16);
-  }
-}
-
-@media (max-width: 480px) {
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .export-btn {
-    flex-direction: column;
-    text-align: center;
-    gap: var(--space-12);
-    padding: var(--space-12);
-  }
-  
-  .historical-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-8);
-    padding: var(--space-8);
-  }
-  
-  .historical-stats {
-    flex-wrap: wrap;
-    gap: var(--space-8);
-  }
-  
-  .calendar-section,
-  .daily-entry-section,
-  .monthly-summary-section,
-  .historical-data-section,
-  .export-section {
+/* Entry Types Legend Grid Layout */
+.entry-types-legend {
+    background: var(--color-bg-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
     padding: var(--space-16);
-  }
-  
-  .main-dashboard {
-    padding: 0 var(--space-12);
-    gap: var(--space-12);
-  }
-  
-  .analytics-tabs {
-    margin-bottom: var(--space-16);
-  }
-  
-  .analytics-tab {
-    padding: var(--space-8) var(--space-12);
-    font-size: var(--font-size-xs);
-  }
-  
-  .export-actions {
-    flex-direction: column;
+    margin-bottom: var(--space-20);
+}
+
+.entry-types-legend h4 {
+    margin: 0 0 var(--space-12) 0;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: var(--space-8);
-  }
-  
-  .modal-content--large {
-    width: 100%;
-    margin: var(--space-8);
-    max-width: calc(100vw - var(--space-16));
-  }
+    margin-bottom: var(--space-12);
 }
 
-/* Loading States */
-.loading-skeleton {
-  background: linear-gradient(90deg, 
-    var(--color-bg-1) 25%, 
-    var(--color-bg-2) 50%, 
-    var(--color-bg-1) 75%);
-  background-size: 200% 100%;
-  animation: loading-shimmer 2s infinite;
-  border-radius: var(--radius-base);
+/* Weekend Legend Item Special Styling */
+.legend-item.weekend-legend {
+    background: var(--color-bg-3);
+    border: 1px solid rgba(var(--color-success-rgb), 0.3);
+    border-radius: var(--radius-base);
+    padding: var(--space-8);
+    transition: all var(--duration-fast) var(--ease-standard);
 }
 
-@keyframes loading-shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+.legend-item.weekend-legend:hover {
+    background: rgba(var(--color-success-rgb), 0.15);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
 }
 
-.summary-card.loading .summary-value,
-.summary-card.loading .summary-label {
-  background: var(--color-bg-2);
-  color: transparent;
-  border-radius: var(--radius-sm);
+/* Legend Note Styling */
+.legend-note {
+    text-align: center;
+    padding: var(--space-8);
+    background: rgba(var(--color-success-rgb), 0.08);
+    border: 1px solid rgba(var(--color-success-rgb), 0.2);
+    border-radius: var(--radius-base);
+    margin-top: var(--space-8);
 }
 
-/* Enhanced Entry Form Styling */
-.daily-entry-section .entry-form {
-  background: var(--color-bg-1);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-20);
-  margin-bottom: var(--space-20);
+.legend-note small {
+    color: var(--color-success);
+    font-weight: var(--font-weight-medium);
+    font-style: italic;
 }
 
-/* No Data States */
-.no-data-state {
-  text-align: center;
-  padding: var(--space-32);
-  color: var(--color-text-secondary);
+/* Enhanced Legend Colors for Weekend */
+.legend-color.weekend {
+    background: linear-gradient(45deg, var(--color-success) 0%, var(--color-primary) 100%);
+    box-shadow: 0 2px 4px rgba(var(--color-success-rgb), 0.2);
+    animation: weekend-pulse 2s infinite;
 }
 
-.no-data-icon {
-  font-size: var(--font-size-4xl);
-  margin-bottom: var(--space-12);
-  opacity: 0.5;
+@keyframes weekend-pulse {
+    0%, 100% { 
+        box-shadow: 0 2px 4px rgba(var(--color-success-rgb), 0.2); 
+    }
+    50% { 
+        box-shadow: 0 2px 8px rgba(var(--color-success-rgb), 0.4); 
+    }
 }
 
-.no-data-message {
-  font-size: var(--font-size-base);
-  margin-bottom: var(--space-8);
-  font-weight: var(--font-weight-medium);
+/* Weekend Statistics in Monthly Summary */
+.weekend-stats {
+    background: var(--color-bg-3);
+    border: 1px solid rgba(var(--color-success-rgb), 0.3);
+    border-radius: var(--radius-base);
+    padding: var(--space-12);
+    margin-top: var(--space-16);
 }
 
-.no-data-hint {
-  font-size: var(--font-size-sm);
-  opacity: 0.8;
+.weekend-stats h5 {
+    margin: 0 0 var(--space-8) 0;
+    color: var(--color-success);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
 }
 
-/* Success States */
-.export-success {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-12);
-  background: rgba(var(--color-success-rgb), 0.1);
-  color: var(--color-success);
-  border: 1px solid rgba(var(--color-success-rgb), 0.2);
-  border-radius: var(--radius-base);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+.weekend-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-8);
+    text-align: center;
 }
 
-/* Enhanced Accessibility */
-@media (prefers-reduced-motion: reduce) {
-  .summary-card,
-  .export-btn,
-  .historical-item,
-  .analytics-tab {
-    transition: none;
-  }
-  
-  .summary-card:hover,
-  .export-btn:hover {
-    transform: none;
-  }
-  
-  .loading-skeleton {
-    animation: none;
-  }
+.weekend-stat {
+    padding: var(--space-8);
 }
 
-/* High Contrast Mode */
+.weekend-stat-value {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-success);
+    display: block;
+}
+
+.weekend-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+/* Calendar Day Hover Effects for Weekends */
+.calendar-day.weekend:hover {
+    background-color: rgba(var(--color-success-rgb), 0.2);
+    box-shadow: 0 4px 8px rgba(var(--color-success-rgb), 0.15);
+    transform: translateY(-1px);
+}
+
+/* Weekend Day Number Styling */
+.calendar-day.weekend {
+    font-weight: var(--font-weight-semibold);
+    position: relative;
+}
+
+/* Saturday special styling */
+.calendar-day.saturday {
+    background: linear-gradient(135deg, 
+        rgba(var(--color-success-rgb), 0.08) 0%, 
+        rgba(var(--color-success-rgb), 0.12) 100%);
+}
+
+/* Sunday special styling */
+.calendar-day.sunday {
+    background: linear-gradient(135deg, 
+        rgba(var(--color-success-rgb), 0.12) 0%, 
+        rgba(var(--color-success-rgb), 0.16) 100%);
+}
+
+/* Weekend + Today combination */
+.calendar-day.weekend.today {
+    background: linear-gradient(135deg, 
+        rgba(var(--color-success-rgb), 0.15) 0%, 
+        var(--color-bg-6) 50%,
+        rgba(var(--color-success-rgb), 0.15) 100%);
+    border: 2px solid var(--color-success);
+    animation: weekend-today-glow 2s infinite;
+}
+
+@keyframes weekend-today-glow {
+    0%, 100% { 
+        box-shadow: 0 0 8px rgba(var(--color-success-rgb), 0.3); 
+    }
+    50% { 
+        box-shadow: 0 0 16px rgba(var(--color-success-rgb), 0.5); 
+    }
+}
+
+/* Weekend Work Warning (for unusual weekend work entries) */
+.weekend-work-warning {
+    background: rgba(var(--color-warning-rgb), 0.1);
+    border: 1px solid rgba(var(--color-warning-rgb), 0.3);
+    color: var(--color-warning);
+    padding: var(--space-8);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-8);
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+}
+
+.weekend-work-warning::before {
+    content: "⚠️";
+    font-size: var(--font-size-base);
+}
+
+/* Responsive Design for Weekends */
+@media (max-width: 768px) {
+    .legend-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .weekend-stats-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+    }
+    
+    .calendar-day.weekend::after {
+        width: 6px;
+        height: 6px;
+    }
+}
+
+/* Mobile Portrait Responsive Styling */
+@media (max-width: 480px) {
+    .entry-types-legend {
+        padding: var(--space-12);
+        margin-bottom: var(--space-16);
+    }
+    
+    .legend-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+    }
+    
+    .weekend-stats {
+        padding: var(--space-8);
+        margin-top: var(--space-12);
+    }
+    
+    .weekend-stats-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+    }
+    
+    .weekend-stat {
+        padding: var(--space-6);
+    }
+    
+    .weekend-stat-value {
+        font-size: var(--font-size-md);
+    }
+    
+    .legend-item.weekend-legend {
+        padding: var(--space-6);
+    }
+    
+    .legend-note {
+        padding: var(--space-6);
+        margin-top: var(--space-6);
+    }
+    
+    .weekend-work-warning {
+        padding: var(--space-6);
+        margin-top: var(--space-6);
+        flex-direction: column;
+        text-align: center;
+        gap: var(--space-4);
+    }
+}
+
+/* Dark Mode Weekend Styling */
+@media (prefers-color-scheme: dark) {
+    .calendar-day.weekend {
+        background-color: rgba(var(--color-success-rgb), 0.15);
+        border-color: rgba(var(--color-success-rgb), 0.3);
+    }
+    
+    .legend-item.weekend-legend {
+        background: var(--color-bg-3);
+        border-color: rgba(var(--color-success-rgb), 0.3);
+    }
+    
+    .legend-note {
+        background: rgba(var(--color-success-rgb), 0.1);
+        border-color: rgba(var(--color-success-rgb), 0.2);
+    }
+    
+    .legend-note small {
+        color: var(--color-success);
+    }
+}
+
+/* Data attribute dark mode support */
+[data-color-scheme="dark"] .calendar-day.weekend {
+    background-color: rgba(var(--color-success-rgb), 0.15);
+    border-color: rgba(var(--color-success-rgb), 0.3);
+}
+
+[data-color-scheme="dark"] .legend-item.weekend-legend {
+    background: var(--color-bg-3);
+    border-color: rgba(var(--color-success-rgb), 0.3);
+}
+
+[data-color-scheme="dark"] .legend-note {
+    background: rgba(var(--color-success-rgb), 0.1);
+    border-color: rgba(var(--color-success-rgb), 0.2);
+}
+
+[data-color-scheme="dark"] .legend-note small {
+    color: var(--color-success);
+}
+
+/* High Contrast Mode for Accessibility */
 @media (prefers-contrast: high) {
-  .summary-card,
-  .export-btn,
-  .historical-item,
-  .analytics-tab {
-    border-width: 2px;
-  }
-  
-  .legend-indicator {
-    border-width: 3px;
-  }
-  
-  .calendar-section,
-  .daily-entry-section,
-  .monthly-summary-section,
-  .historical-data-section,
-  .export-section {
-    border-width: 2px;
-  }
+    .calendar-day.weekend {
+        border: 3px solid var(--color-success);
+        background-color: rgba(var(--color-success-rgb), 0.25);
+    }
+    
+    .calendar-day.weekend::after {
+        border: 2px solid var(--color-surface);
+        background-color: var(--color-success);
+    }
+    
+    .legend-indicator.weekend {
+        border: 2px solid var(--color-text);
+    }
+}
+
+/* Print Styles for Weekends */
+@media print {
+    .calendar-day.weekend {
+        background-color: rgba(var(--color-success-rgb), 0.1) !important;
+        border: 2px solid var(--color-success) !important;
+    }
+    
+    .calendar-day.weekend::after {
+        background-color: var(--color-success) !important;
+    }
+    
+    .legend-note {
+        background-color: rgba(var(--color-success-rgb), 0.1) !important;
+        border-color: var(--color-success) !important;
+    }
 }

@@ -6,24 +6,24 @@
 import { firebaseApp, auth, db, isInitialized as firebaseIsInitialized } from '/config/firebase.js';
 
 // Import Models
-import User from './models/User.js';
-import WorkEntry from './models/WorkEntry.js';
-import Project from './models/Project.js';
+import User from '/models/User.js';
+import WorkEntry from '/models/WorkEntry.js';
+import Project from '/models/Project.js';
 
 // Import Services
-import DataService from './services/DataService.js';
-import ExportService from './services/ExportService.js';
-import AnalyticsService from './services/AnalyticsService.js';
+import DataService from '/services/DataService.js';
+import ExportService from '/services/ExportService.js';
+import AnalyticsService from '/services/AnalyticsService.js';
 
 // Import Controllers
-import AuthController from './controllers/AuthController.js';
-import DashboardController from './controllers/DashboardController.js';
-import EntryController from './controllers/EntryController.js';
-import ProjectController from './controllers/ProjectController.js';
-import ToastController from './controllers/ToastController.js';
+import AuthController from '/controllers/AuthController.js';
+import DashboardController from '/controllers/DashboardController.js';
+import EntryController from '/controllers/EntryController.js';
+import ProjectController from '/controllers/ProjectController.js';
+import ToastController from '/controllers/ToastController.js';
 
 // Import Views
-import CalendarView from './views/CalendarView.js';
+import CalendarView from '/views/CalendarView.js';
 
 /**
  * Enhanced Daily Work Log Tracker Application

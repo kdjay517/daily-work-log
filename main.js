@@ -13,6 +13,15 @@ import EntryController from './controllers/EntryController.js';
 import ProjectController from './controllers/ProjectController.js';
 import ToastController from './controllers/ToastController.js';
 
+// Import new services
+import AnalyticsService from './services/AnalyticsService.js';
+import ExportService from './services/ExportService.js'; 
+import DashboardController from './controllers/DashboardController.js';
+
+// Initialize in your app startup
+
+
+
 /**
  * Main Work Log Application Class
  * Orchestrates all components and manages application lifecycle

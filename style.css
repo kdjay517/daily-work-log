@@ -1682,20 +1682,21 @@ select {
 }
 
 .legend-color.work {
-  background-color: var(--color-primary);
+  background-color: #2563eb !important; /* Blue for Work Entry */
 }
 
 .legend-color.fullLeave {
-  background-color: var(--color-error);
+  background-color: #dc2626 !important; /* Red for Full Day Leave */
 }
 
 .legend-color.halfLeave {
-  background-color: var(--color-warning);
+  background-color: #ea580c !important; /* Orange for Half Day Leave */
 }
 
 .legend-color.holiday {
-  background-color: var(--color-success);
+  background-color: #16a34a !important; /* Green for Holiday */
 }
+
 
 /* Entry Management Section - Enhanced Design */
 .entry-section {
@@ -1876,20 +1877,21 @@ select {
 }
 
 .entry-type-indicator.work {
-  background-color: var(--color-primary);
+  background-color: #2563eb !important; /* Blue */
 }
 
 .entry-type-indicator.fullLeave {
-  background-color: var(--color-error);
+  background-color: #dc2626 !important; /* Red */
 }
 
 .entry-type-indicator.halfLeave {
-  background-color: var(--color-warning);
+  background-color: #ea580c !important; /* Orange */
 }
 
 .entry-type-indicator.holiday {
-  background-color: var(--color-success);
+  background-color: #16a34a !important; /* Green */
 }
+
 /* Entry Types Color Fix - CORRECTED COLORS */
 .legend-color {
   width: 12px;
@@ -1940,7 +1942,7 @@ select {
   background-color: #16a34a !important; /* Green */
 }
 
-/* Calendar Day Entry Indicators */
+/* Calendar Day Entry Indicators - SPECIFIC COLORS FOR EACH TYPE */
 .calendar-day.has-work-entries::after {
   background-color: #2563eb !important; /* Blue */
 }
@@ -1965,6 +1967,7 @@ select {
     #16a34a 270deg 360deg    /* Green */
   ) !important;
 }
+
 
 
 /* Modal - Enhanced Design */

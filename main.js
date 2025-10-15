@@ -1,997 +1,296 @@
-// main.js - UPDATED VERSION WITH DASHBOARD INTEGRATION
-// Main Application Entry Point - Object-Oriented Architecture
+// main.js
+// Enhanced Daily Work Log Tracker - Main Application Entry Point
+// Fixed version with all missing dependencies resolved
 
-// Import all classes
-import FirebaseConfig from './config/firebase.js';
+// Import Firebase configuration
+import { firebaseApp, auth, db, isInitialized as firebaseIsInitialized } from './config/firebase.js';
+
+// Import Models
 import User from './models/User.js';
 import WorkEntry from './models/WorkEntry.js';
 import Project from './models/Project.js';
+
+// Import Services
 import DataService from './services/DataService.js';
-import CalendarView from './views/CalendarView.js';
+import ExportService from './services/ExportService.js';
+import AnalyticsService from './services/AnalyticsService.js';
+
+// Import Controllers
 import AuthController from './controllers/AuthController.js';
+import DashboardController from './controllers/DashboardController.js';
 import EntryController from './controllers/EntryController.js';
 import ProjectController from './controllers/ProjectController.js';
 import ToastController from './controllers/ToastController.js';
 
-// Import new services
-import AnalyticsService from './services/AnalyticsService.js';
-import ExportService from './services/ExportService.js'; 
-import DashboardController from './controllers/DashboardController.js';
+// Import Views
+import CalendarView from './views/CalendarView.js';
 
 /**
- * Main Work Log Application Class
- * Orchestrates all components and manages application lifecycle
+ * Enhanced Daily Work Log Tracker Application
+ * Professional-grade work logging with cloud sync and offline support
  */
-class WorkLogApp {
+class DailyWorkLogApp {
     constructor() {
-        // Core components
+        this.isInitialized = false;
         this.firebaseConfig = null;
         this.user = null;
         this.dataService = null;
-        
-        // Services
-        this.analyticsService = null;
         this.exportService = null;
+        this.analyticsService = null;
+        this.controllers = {};
+        this.views = {};
         
-        // Controllers and Views
-        this.authController = null;
-        this.entryController = null;
-        this.projectController = null;
-        this.calendarView = null;
-        this.toastController = null;
-        this.dashboardController = null; // ✅ NEW: Added dashboard controller
-        
-        // Application state
-        this.isInitialized = false;
-        this.isShuttingDown = false;
-        this.version = '2.0.0';
-        this.buildDate = new Date().toISOString();
-        
-        // Error tracking
-        this.errorCount = 0;
-        this.maxErrors = 10;
+        console.log('🚀 Daily Work Log Tracker - Initializing...');
     }
 
     /**
      * Initialize the application
-     * @returns {Promise<boolean>} - Success status
      */
-    async initialize() {
-        console.log(`🚀 Initializing Work Log Application v${this.version}...`);
-        
+    async init() {
         try {
-            // Set up global error handling
-            this.setupGlobalErrorHandling();
-            
             // Show loading state
-            this.showLoadingState();
+            this.showLoadingState('Initializing application...');
+            
+            // Initialize Firebase configuration wrapper
+            this.initFirebaseConfig();
             
             // Initialize core services
-            await this.initializeCoreServices();
+            await this.initCoreServices();
             
-            // Initialize UI components
-            this.initializeUIComponents();
+            // Initialize controllers and views
+            await this.initUI();
             
-            // Set up global references (for inline event handlers)
-            this.setupGlobalReferences();
+            // Setup global event listeners
+            this.setupGlobalEventListeners();
             
-            // Set up inter-component communication
-            this.setupEventListeners();
+            // Expose global references for HTML onclick handlers
+            this.exposeGlobalReferences();
             
-            // Initialize UI state
-            await this.initializeUI();
-            
-            // Setup application features
-            this.setupApplicationFeatures();
-            
-            // Hide loading state
+            // Complete initialization
+            this.isInitialized = true;
             this.hideLoadingState();
             
-            this.isInitialized = true;
-            
-            console.log(`✅ Work Log Application v${this.version} initialized successfully!`);
-            
-            // Dispatch ready event
-            this.dispatchAppEvent('ready', {
-                version: this.version,
-                buildDate: this.buildDate,
-                features: this.getEnabledFeatures()
-            });
-            
-            return true;
+            console.log('✅ Daily Work Log Tracker - Initialized successfully');
             
         } catch (error) {
             console.error('❌ Application initialization failed:', error);
-            this.showInitializationError(error);
-            return false;
+            this.handleInitializationError(error);
         }
     }
 
     /**
-     * Initialize core services (Firebase, User, DataService)
+     * Initialize Firebase configuration wrapper
      */
-    async initializeCoreServices() {
-        console.log('📡 Initializing core services...');
+    initFirebaseConfig() {
+        this.firebaseConfig = {
+            getApp: () => firebaseApp,
+            getAuth: () => auth,
+            getDatabase: () => db,
+            isInitialized: () => firebaseIsInitialized()
+        };
         
-        // Initialize Firebase
-        this.firebaseConfig = new FirebaseConfig();
-        const firebaseInitialized = this.firebaseConfig.initialize();
-        
-        if (firebaseInitialized) {
-            console.log('✅ Firebase initialized');
-        } else {
-            console.warn('⚠️ Firebase initialization failed - running in offline mode');
-        }
-        
-        // Initialize User model
+        console.log('🔥 Firebase configuration initialized');
+    }
+
+    /**
+     * Initialize core services
+     */
+    async initCoreServices() {
+        // Initialize User service
         this.user = new User(this.firebaseConfig);
-        console.log('✅ User service initialized');
+        console.log('👤 User service initialized');
         
-        // Initialize Data Service
+        // Initialize DataService
         this.dataService = new DataService(this.firebaseConfig, this.user);
-        console.log('✅ Data service initialized');
-
-        // ✅ NEW: Initialize Analytics and Export Services
-        try {
-            this.analyticsService = new AnalyticsService(this.dataService);
-            console.log('✅ Analytics service initialized');
-        } catch (error) {
-            console.warn('⚠️ Analytics service failed to initialize:', error);
-            this.analyticsService = null;
-        }
-
-        try {
-            this.exportService = new ExportService(this.dataService);
-            console.log('✅ Export service initialized');
-        } catch (error) {
-            console.warn('⚠️ Export service failed to initialize:', error);
-            this.exportService = null;
-        }
+        console.log('💾 Data service initialized');
+        
+        // Initialize ExportService
+        this.exportService = new ExportService(this.dataService);
+        console.log('📁 Export service initialized');
+        
+        // Initialize AnalyticsService
+        this.analyticsService = new AnalyticsService(this.dataService);
+        console.log('📊 Analytics service initialized');
+        
+        // Load initial data
+        await this.dataService.loadData();
+        console.log('📋 Initial data loaded');
     }
 
     /**
-     * Initialize UI components (Views and Controllers)
+     * Initialize UI controllers and views
      */
-    initializeUIComponents() {
-        console.log('🎨 Initializing UI components...');
+    async initUI() {
+        // Initialize Toast Controller first (used by other controllers)
+        this.controllers.toast = new ToastController();
+        console.log('🍞 Toast controller initialized');
         
         // Initialize Calendar View
-        this.calendarView = new CalendarView(this.dataService);
-        console.log('✅ Calendar view initialized');
+        this.views.calendar = new CalendarView(this.dataService);
+        console.log('📅 Calendar view initialized');
         
         // Initialize Controllers
-        this.toastController = new ToastController();
-        console.log('✅ Toast controller initialized');
+        this.controllers.auth = new AuthController(this.user, this.dataService);
+        this.controllers.dashboard = new DashboardController(this.dataService, this.analyticsService);
+        this.controllers.entry = new EntryController(this.dataService, this.views.calendar);
+        this.controllers.project = new ProjectController(this.dataService);
         
-        this.authController = new AuthController(this.user);
-        console.log('✅ Auth controller initialized');
+        console.log('🎮 Controllers initialized');
         
-        this.projectController = new ProjectController(this.dataService);
-        console.log('✅ Project controller initialized');
-        
-        this.entryController = new EntryController(this.dataService, this.calendarView);
-        console.log('✅ Entry controller initialized');
-
-        // ✅ NEW: Initialize Dashboard Controller
-        this.initializeDashboardController();
+        // Set up authentication flow
+        this.setupAuthenticationFlow();
     }
 
     /**
-     * ✅ NEW: Initialize dashboard controller
+     * Setup authentication flow
      */
-    initializeDashboardController() {
-        console.log('📊 Initializing Dashboard Controller...');
-        
+    setupAuthenticationFlow() {
+        // Listen for authentication state changes
+        this.user.onAuthStateChanged(async (user) => {
+            if (user) {
+                console.log('👤 User authenticated:', user.email);
+                await this.handleUserAuthenticated(user);
+            } else {
+                console.log('👤 User not authenticated');
+                this.handleUserNotAuthenticated();
+            }
+        });
+    }
+
+    /**
+     * Handle user authentication
+     * @param {Object} user - Authenticated user object
+     */
+    async handleUserAuthenticated(user) {
         try {
-            // Initialize Dashboard Controller with available services
-            this.dashboardController = new DashboardController(
-                this.dataService,
-                this.analyticsService,  // May be null - controller handles this
-                this.exportService      // May be null - controller handles this
-            );
+            // Load user-specific data
+            await this.dataService.loadData();
             
-            console.log('✅ Dashboard controller initialized');
+            // Update all controllers
+            this.controllers.dashboard.refresh();
+            this.controllers.project.updateProjectDropdown();
+            this.views.calendar.refresh();
             
-            // Make dashboard controller available globally
-            window.dashboardController = this.dashboardController;
+            // Show main application
+            this.showMainApplication();
+            
+            // Show welcome toast
+            this.controllers.toast.authEvent('login', {
+                message: `Welcome back, ${user.displayName || user.email}!`
+            });
             
         } catch (error) {
-            console.error('❌ Dashboard controller initialization failed:', error);
-            this.dashboardController = null;
+            console.error('Error handling user authentication:', error);
+            this.controllers.toast.error('Failed to load user data');
         }
     }
 
     /**
-     * Set up global references for inline event handlers
+     * Handle user not authenticated
      */
-    setupGlobalReferences() {
-        // Make controllers available globally for inline event handlers
-        window.entryController = this.entryController;
-        window.projectController = this.projectController;
-        window.authController = this.authController;
-        window.dashboardController = this.dashboardController; // ✅ NEW
-        window.app = this;
+    handleUserNotAuthenticated() {
+        // Clear sensitive data
+        this.dataService.clearData();
         
-        // Make models available globally for validation and utilities
-        window.WorkEntry = WorkEntry;
-        window.Project = Project;
-        window.User = User;
+        // Show authentication screen
+        this.showAuthenticationScreen();
         
-        console.log('🌐 Global references configured');
+        // Clear calendar selection
+        this.views.calendar.selectedDate = null;
+        this.views.calendar.refresh();
     }
 
     /**
-     * Set up inter-component communication
+     * Setup global event listeners
      */
-    setupEventListeners() {
-        console.log('🔗 Setting up event listeners...');
-        
-        // Authentication events
-        document.addEventListener('auth:authenticated', async (event) => {
-            console.log('🔑 User authenticated, loading data...');
-            try {
-                await this.dataService.loadData();
-                this.calendarView.refresh();
-                this.entryController.updateProjectDropdown();
-                
-                // ✅ NEW: Refresh dashboard after authentication
-                if (this.dashboardController) {
-                    this.dashboardController.refreshDashboard();
-                }
-                
-                this.showToast('✅ Data synced from cloud');
-                
-                // Track user login
-                this.trackEvent('user_login', { method: 'firebase' });
-                
-            } catch (error) {
-                console.error('Error loading user data:', error);
-                this.showToast('⚠️ Error loading cloud data, using local data');
-            }
-        });
-
-        document.addEventListener('auth:guest', async (event) => {
-            console.log('👤 Guest mode activated, loading local data...');
-            this.dataService.loadFromLocal();
-            this.calendarView.refresh();
-            this.entryController.updateProjectDropdown();
-            
-            // ✅ NEW: Refresh dashboard in guest mode
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-            
-            // Track guest usage
-            this.trackEvent('guest_mode_activated');
-        });
-
-        document.addEventListener('auth:logout', (event) => {
-            console.log('👋 User logged out, clearing data...');
-            this.dataService.clearData();
-            this.calendarView.refresh();
-            this.entryController.updateProjectDropdown();
-            
-            // ✅ NEW: Refresh dashboard after logout
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-            
-            // Track logout
-            this.trackEvent('user_logout');
-        });
-
-        // Project events
-        document.addEventListener('projects:updated', (event) => {
-            console.log('📋 Projects updated, refreshing dropdowns...');
-            this.entryController.updateProjectDropdown();
-            
-            // ✅ NEW: Refresh dashboard when projects are updated
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-        });
-
-        // Calendar events
-        document.addEventListener('calendar:dateSelected', (event) => {
-            console.log('📅 Date selected:', event.detail.dateKey);
-            this.trackEvent('date_selected', { date: event.detail.dateKey });
-            
-            // ✅ NEW: Update dashboard export button states when date is selected
-            if (this.dashboardController) {
-                this.dashboardController.updateExportButtonStates();
-            }
-        });
-
-        // ✅ NEW: Entry events - refresh dashboard
-        document.addEventListener('entry:added', (event) => {
-            this.trackEvent('entry_added', { type: event.detail.type });
-            
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-        });
-
-        document.addEventListener('entry:updated', (event) => {
-            this.trackEvent('entry_updated', { type: event.detail.type });
-            
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-        });
-
-        document.addEventListener('entry:deleted', (event) => {
-            this.trackEvent('entry_deleted', { type: event.detail.type });
-            
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-        });
-
-        // ✅ NEW: Data events - refresh dashboard
-        document.addEventListener('data:updated', (event) => {
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-        });
-
-        document.addEventListener('data:imported', (event) => {
-            console.log('📥 Data imported, refreshing all components...');
-            
-            // Refresh all components
-            this.calendarView.refresh();
-            this.entryController.updateProjectDropdown();
-            
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-            
-            this.showToast('✅ Data imported and application refreshed');
-        });
-
-        // Export functionality
-        this.setupExportEvents();
-        
-        // Application lifecycle events
-        this.setupLifecycleEvents();
-        
-        // Performance monitoring
-        this.setupPerformanceMonitoring();
-    }
-
-    /**
-     * Set up export functionality
-     */
-    setupExportEvents() {
-        const exportBtn = document.getElementById('exportBtn');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
-                this.exportMonthData();
-                this.trackEvent('data_exported', { 
-                    format: 'csv',
-                    month: this.calendarView.getCurrentDate().getMonth(),
-                    year: this.calendarView.getCurrentDate().getFullYear()
-                });
-            });
-        }
-    }
-
-    /**
-     * Set up application lifecycle events
-     */
-    setupLifecycleEvents() {
-        // Before unload
-        window.addEventListener('beforeunload', (event) => {
-            if (this.hasUnsavedChanges()) {
-                event.preventDefault();
-                event.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-            }
-            this.trackEvent('app_unload');
-        });
-
-        // Page visibility change
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                this.trackEvent('app_hidden');
-                this.pauseApplication();
-            } else {
-                this.trackEvent('app_visible');
-                this.resumeApplication();
-            }
-        });
-
-        // Online/offline events
+    setupGlobalEventListeners() {
+        // Network status monitoring
         window.addEventListener('online', () => {
-            this.showToast('🌐 Back online - attempting to sync data');
-            this.handleOnlineStateChange(true);
+            this.controllers.toast.info('🌐 Back online - syncing data...');
+            this.dataService.handleNetworkChange(true);
         });
 
         window.addEventListener('offline', () => {
-            this.showToast('📡 You are now offline - data will be saved locally');
-            this.handleOnlineStateChange(false);
+            this.controllers.toast.warning('📡 Working offline - data will sync when reconnected');
+            this.dataService.handleNetworkChange(false);
         });
-    }
 
-    /**
-     * Set up performance monitoring
-     */
-    setupPerformanceMonitoring() {
-        // Monitor long tasks
-        if ('PerformanceObserver' in window) {
-            try {
-                const observer = new PerformanceObserver((list) => {
-                    const entries = list.getEntries();
-                    entries.forEach(entry => {
-                        if (entry.duration > 100) {
-                            console.warn(`Long task detected: ${entry.duration}ms`);
-                            this.trackEvent('performance_warning', {
-                                type: 'long_task',
-                                duration: entry.duration
-                            });
-                        }
-                    });
-                });
-                
-                observer.observe({ entryTypes: ['longtask'] });
-            } catch (error) {
-                console.warn('Performance monitoring not available:', error);
+        // Unload warning for unsaved changes
+        window.addEventListener('beforeunload', (e) => {
+            const syncStatus = this.dataService.getSyncStatus();
+            if (syncStatus.pendingChanges) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                return e.returnValue;
             }
-        }
+        });
 
-        // Monitor memory usage (if available)
-        if ('memory' in performance) {
-            setInterval(() => {
-                const memory = performance.memory;
-                if (memory.usedJSHeapSize > 50 * 1024 * 1024) { // 50MB
-                    console.warn('High memory usage detected');
-                    this.trackEvent('performance_warning', {
-                        type: 'high_memory',
-                        usage: memory.usedJSHeapSize
-                    });
-                }
-            }, 60000); // Check every minute
-        }
-    }
-
-    /**
-     * Initialize UI state
-     */
-    async initializeUI() {
-        console.log('🎯 Initializing UI state...');
-        
-        // Initialize calendar view
-        this.calendarView.initialize();
-        
-        // Load initial data if user is already authenticated
-        if (this.user.isAuthenticated() && !this.user.isGuest()) {
-            try {
-                await this.dataService.loadData();
-                this.calendarView.refresh();
-                this.entryController.updateProjectDropdown();
-                
-                // ✅ NEW: Initialize dashboard with data
-                if (this.dashboardController) {
-                    this.dashboardController.refreshDashboard();
-                }
-                
-                console.log('📊 Initial data loaded from cloud');
-            } catch (error) {
-                console.warn('Error loading initial data:', error);
-                this.showToast('⚠️ Using local data - sync will retry when online');
-            }
-        } else if (this.user.isGuest()) {
-            this.dataService.loadFromLocal();
-            this.calendarView.refresh();
-            this.entryController.updateProjectDropdown();
-            
-            // ✅ NEW: Initialize dashboard in guest mode
-            if (this.dashboardController) {
-                this.dashboardController.refreshDashboard();
-            }
-            
-            console.log('💾 Initial data loaded from local storage');
-        }
-    }
-
-    /**
-     * Set up additional application features
-     */
-    setupApplicationFeatures() {
-        console.log('🔧 Setting up application features...');
-        
-        // Set up auto-save
-        this.setupAutoSave();
-        
-        // Set up keyboard shortcuts
-        this.setupKeyboardShortcuts();
-        
-        // Set up theme management
-        this.setupThemeManagement();
-        
-        // Set up data validation
-        this.setupDataValidation();
-        
-        // Set up backup system
-        this.setupBackupSystem();
-    }
-
-    /**
-     * Set up auto-save functionality
-     */
-    setupAutoSave() {
-        // Auto-save every 30 seconds if there are changes
-        setInterval(async () => {
-            if (this.hasUnsavedChanges()) {
-                try {
-                    await this.dataService.saveData();
-                    console.log('💾 Auto-saved data');
-                    
-                    // ✅ NEW: Trigger data updated event after auto-save
-                    document.dispatchEvent(new CustomEvent('data:updated'));
-                    
-                } catch (error) {
-                    console.warn('Auto-save failed:', error);
-                }
-            }
-        }, 30000);
-    }
-
-    /**
-     * Set up global keyboard shortcuts
-     */
-    setupKeyboardShortcuts() {
+        // Global keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + S to save
+            // Ctrl/Cmd + S: Quick save
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                this.forceSave();
+                this.quickSave();
             }
             
-            // Ctrl/Cmd + Shift + E to export
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'E') {
+            // Ctrl/Cmd + E: Quick export
+            if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
                 e.preventDefault();
-                this.exportMonthData();
-            }
-            
-            // Ctrl/Cmd + Shift + D to toggle debug mode
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'D') {
-                e.preventDefault();
-                this.toggleDebugMode();
-            }
-            
-            // Ctrl/Cmd + Shift + ? to show help
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '?') {
-                e.preventDefault();
-                this.showHelpDialog();
-            }
-        });
-    }
-
-    /**
-     * Set up theme management
-     */
-    setupThemeManagement() {
-        // Respect system theme preference
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        mediaQuery.addListener((e) => {
-            console.log(`System theme changed to: ${e.matches ? 'dark' : 'light'}`);
-            this.trackEvent('theme_changed', { theme: e.matches ? 'dark' : 'light', source: 'system' });
-        });
-    }
-
-    /**
-     * Set up data validation
-     */
-    setupDataValidation() {
-        // Validate data integrity periodically
-        setInterval(() => {
-            this.validateDataIntegrity();
-        }, 300000); // Every 5 minutes
-    }
-
-    /**
-     * Set up backup system
-     */
-    setupBackupSystem() {
-        // Create backup every hour
-        setInterval(() => {
-            this.createDataBackup();
-        }, 3600000); // Every hour
-    }
-
-    /**
-     * Export month data functionality
-     */
-    exportMonthData() {
-        try {
-            const currentDate = this.calendarView.getCurrentDate();
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-            const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(currentDate);
-
-            // Collect all entries for the current month
-            const monthEntries = this.collectMonthEntries(year, month);
-
-            if (monthEntries.length === 0) {
-                this.showToast('📊 No data to export for this month');
-                return false;
-            }
-
-            // Show export format dialog
-            const exportFormat = confirm('Click OK for CSV format, Cancel for JSON format');
-
-            if (exportFormat) {
-                // Export as CSV
-                this.exportToCSV(monthEntries, `work-log-${monthName}-${year}.csv`);
-            } else {
-                // Export as JSON
-                const exportData = {
-                    metadata: {
-                        month: monthName,
-                        year: year,
-                        totalEntries: monthEntries.length,
-                        exportDate: new Date().toISOString(),
-                        version: this.version,
-                        user: this.user.getUserDisplayName()
-                    },
-                    entries: monthEntries
-                };
-                this.downloadJSON(exportData, `work-log-${monthName}-${year}.json`);
-            }
-
-            this.showToast('📁 Monthly data exported successfully');
-            return true;
-            
-        } catch (error) {
-            console.error('Export failed:', error);
-            this.showToast('❌ Export failed. Please try again.');
-            return false;
-        }
-    }
-
-    /**
-     * Collect entries for a specific month
-     * @param {number} year - Year
-     * @param {number} month - Month (0-11)
-     * @returns {Array} - Array of entries
-     */
-    collectMonthEntries(year, month) {
-        const monthEntries = [];
-        const workLogData = this.dataService.getWorkLogData();
-
-        Object.keys(workLogData).forEach(dateKey => {
-            const date = new Date(dateKey);
-            if (date.getFullYear() === year && date.getMonth() === month) {
-                workLogData[dateKey].forEach(entry => {
-                    const workEntry = new WorkEntry(entry);
-                    const project = this.projectController.findProjectByValue(entry.project);
-                    
-                    monthEntries.push({
-                        date: dateKey,
-                        dayOfWeek: new Date(dateKey).toLocaleDateString('en-US', { weekday: 'long' }),
-                        type: workEntry.getTypeInfo().label,
-                        project: project ? project.getDisplayName() : entry.project || 'N/A',
-                        projectCategory: project ? project.category : 'N/A',
-                        hours: workEntry.getHours(),
-                        halfDayPeriod: entry.halfDayPeriod || 'N/A',
-                        comments: entry.comments || 'N/A',
-                        timestamp: entry.timestamp || 'N/A',
-                        createdDate: new Date(entry.timestamp).toLocaleDateString()
-                    });
-                });
+                this.quickExport();
             }
         });
 
-        // Sort by date
-        return monthEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
-    }
-
-    /**
-     * Export data to CSV format
-     * @param {Array} data - Data to export
-     * @param {string} filename - Output filename
-     */
-    exportToCSV(data, filename) {
-        const headers = [
-            'Date', 'Day of Week', 'Entry Type', 'Project', 'Project Category', 
-            'Hours', 'Half Day Period', 'Comments', 'Created Date', 'Timestamp'
-        ];
-        
-        const csvContent = [
-            headers.join(','),
-            ...data.map(entry => [
-                entry.date,
-                entry.dayOfWeek,
-                entry.type,
-                `"${entry.project.replace(/"/g, '""')}"`,
-                entry.projectCategory,
-                entry.hours,
-                entry.halfDayPeriod,
-                `"${entry.comments.replace(/"/g, '""')}"`,
-                entry.createdDate,
-                entry.timestamp
-            ].join(','))
-        ].join('\n');
-
-        this.downloadFile(csvContent, filename, 'text/csv');
-    }
-
-    /**
-     * Download JSON data
-     * @param {Object} data - Data to download
-     * @param {string} filename - Output filename
-     */
-    downloadJSON(data, filename) {
-        const jsonContent = JSON.stringify(data, null, 2);
-        this.downloadFile(jsonContent, filename, 'application/json');
-    }
-
-    /**
-     * Download file utility
-     * @param {string} content - File content
-     * @param {string} filename - Filename
-     * @param {string} mimeType - MIME type
-     */
-    downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    }
-
-    // Application lifecycle methods
-
-    /**
-     * Handle online state change
-     * @param {boolean} isOnline - Whether online
-     */
-    async handleOnlineStateChange(isOnline) {
-        if (isOnline && this.user.isAuthenticated() && !this.user.isGuest()) {
-            try {
-                await this.dataService.saveData();
-                this.showToast('☁️ Data synced successfully');
-                
-                // ✅ NEW: Refresh dashboard after successful sync
-                if (this.dashboardController) {
-                    this.dashboardController.refreshDashboard();
-                }
-                
-            } catch (error) {
-                console.error('Sync failed after going online:', error);
-                this.showToast('⚠️ Sync failed - will retry automatically');
-            }
-        }
-    }
-
-    /**
-     * Pause application (when hidden)
-     */
-    pauseApplication() {
-        // Reduce activity when app is hidden
-        console.log('⏸️ Application paused');
-    }
-
-    /**
-     * Resume application (when visible)
-     */
-    resumeApplication() {
-        console.log('▶️ Application resumed');
-        
-        // Refresh data if needed
-        if (this.user.isAuthenticated() && !this.user.isGuest()) {
-            this.dataService.loadData().catch(error => {
-                console.warn('Failed to refresh data on resume:', error);
-            });
-        }
-        
-        // ✅ NEW: Refresh dashboard on resume
-        if (this.dashboardController) {
-            setTimeout(() => {
-                this.dashboardController.refreshDashboard();
-            }, 1000);
-        }
-    }
-
-    /**
-     * Force save data
-     */
-    async forceSave() {
-        try {
-            const result = await this.dataService.saveData();
-            this.showToast(result.message || '💾 Data saved');
-            
-            // ✅ NEW: Trigger data updated event after force save
-            document.dispatchEvent(new CustomEvent('data:updated'));
-            
-        } catch (error) {
-            console.error('Force save failed:', error);
-            this.showToast('❌ Save failed');
-        }
-    }
-
-    /**
-     * Check if there are unsaved changes
-     * @returns {boolean} - Whether there are unsaved changes
-     */
-    hasUnsavedChanges() {
-        // Simple heuristic - could be more sophisticated
-        return Date.now() - (this.dataService.lastSyncTime?.getTime() || 0) > 300000; // 5 minutes
-    }
-
-    /**
-     * Validate data integrity
-     */
-    validateDataIntegrity() {
-        try {
-            const workLogData = this.dataService.getWorkLogData();
-            const projects = this.dataService.getProjects();
-            
-            // Basic validation checks
-            let issues = 0;
-            
-            // Check for orphaned entries
-            Object.values(workLogData).forEach(entries => {
-                entries.forEach(entry => {
-                    if (entry.project && !this.projectController.findProjectByValue(entry.project)) {
-                        console.warn('Orphaned project reference:', entry.project);
-                        issues++;
-                    }
-                });
-            });
-            
-            // Check for duplicate projects
-            const projectKeys = new Set();
-            projects.forEach(project => {
-                const key = `${project.projectId}-${project.subCode}`;
-                if (projectKeys.has(key)) {
-                    console.warn('Duplicate project found:', key);
-                    issues++;
-                } else {
-                    projectKeys.add(key);
-                }
-            });
-            
-            if (issues > 0) {
-                console.warn(`Data validation found ${issues} issues`);
-                this.trackEvent('data_validation_issues', { count: issues });
-            }
-            
-        } catch (error) {
-            console.error('Data validation failed:', error);
-        }
-    }
-
-    /**
-     * Create data backup
-     */
-    createDataBackup() {
-        try {
-            const backupData = this.dataService.exportData();
-            const backupKey = `backup_${new Date().toISOString().split('T')[0]}`;
-            localStorage.setItem(backupKey, JSON.stringify(backupData));
-            
-            // Keep only last 7 backups
-            const backupKeys = Object.keys(localStorage)
-                .filter(key => key.startsWith('backup_'))
-                .sort()
-                .reverse();
-                
-            backupKeys.slice(7).forEach(key => {
-                localStorage.removeItem(key);
-            });
-            
-            console.log('📦 Data backup created');
-            
-        } catch (error) {
-            console.error('Backup creation failed:', error);
-        }
-    }
-
-    /**
-     * Set up global error handling
-     */
-    setupGlobalErrorHandling() {
-        window.addEventListener('error', (event) => {
-            this.handleError(event.error, 'global_error');
+        // Custom application events
+        document.addEventListener('app:refresh', () => {
+            this.refreshAllComponents();
         });
 
-        window.addEventListener('unhandledrejection', (event) => {
-            this.handleError(event.reason, 'unhandled_rejection');
-        });
-    }
-
-    /**
-     * Handle application errors
-     * @param {Error} error - Error object
-     * @param {string} context - Error context
-     */
-    handleError(error, context = 'unknown') {
-        this.errorCount++;
-        
-        console.error(`Application error (${context}):`, error);
-        
-        this.trackEvent('app_error', {
-            context,
-            message: error.message,
-            stack: error.stack?.substring(0, 500),
-            errorCount: this.errorCount
+        document.addEventListener('app:export', (e) => {
+            this.handleExportRequest(e.detail);
         });
 
-        // Show user-friendly error message
-        if (this.errorCount < this.maxErrors) {
-            this.showToast('⚠️ An error occurred. The application will continue running.');
-        } else {
-            this.showToast('❌ Multiple errors detected. Consider refreshing the page.');
-        }
+        console.log('🎯 Global event listeners setup complete');
     }
 
     /**
-     * Toggle debug mode
+     * Expose global references for HTML onclick handlers
      */
-    toggleDebugMode() {
-        const isDebug = document.body.classList.toggle('debug-mode');
-        console.log(`Debug mode: ${isDebug ? 'enabled' : 'disabled'}`);
-        this.showToast(`🐛 Debug mode ${isDebug ? 'enabled' : 'disabled'}`);
+    exposeGlobalReferences() {
+        // Expose controllers globally
+        window.authController = this.controllers.auth;
+        window.dashboardController = this.controllers.dashboard;
+        window.entryController = this.controllers.entry;
+        window.projectController = this.controllers.project;
+        window.toastController = this.controllers.toast;
         
-        // ✅ NEW: Show dashboard debug info in debug mode
-        if (isDebug && this.dashboardController) {
-            console.log('📊 Dashboard Controller Status:', {
-                initialized: !!this.dashboardController,
-                analyticsService: !!this.analyticsService,
-                exportService: !!this.exportService,
-                elements: Object.keys(this.dashboardController.elements).length
-            });
-        }
-    }
-
-    /**
-     * Show help dialog
-     */
-    showHelpDialog() {
-        const helpContent = `
-        📊 Daily Work Log Tracker - Help
+        // Expose views globally
+        window.calendarView = this.views.calendar;
         
-        🔑 Keyboard Shortcuts:
-        • Ctrl/Cmd + S: Save data
-        • Ctrl/Cmd + Shift + E: Export month data
-        • Ctrl/Cmd + Shift + P: Manage projects
-        • Ctrl/Cmd + Shift + D: Toggle debug mode
-        • Escape: Close modals
+        // Expose services globally
+        window.dataService = this.dataService;
+        window.exportService = this.exportService;
+        window.analyticsService = this.analyticsService;
         
-        📅 Calendar Navigation:
-        • Arrow keys: Navigate dates
-        • Home: Go to first day of month
-        • End: Go to last day of month
-        • Page Up/Down: Navigate months
+        // Expose main app
+        window.dailyWorkLogApp = this;
         
-        📊 Dashboard Features:
-        • Monthly Summary: Real-time statistics
-        • Historical Data: Past months overview
-        • Export Options: CSV/JSON downloads
-        • Weekend Detection: Green weekend days
-        
-        📝 Quick Tips:
-        • Data is auto-saved every 30 seconds
-        • Use guest mode for temporary usage
-        • Export your data regularly for backup
-        • Dashboard updates automatically when data changes
-        `;
-        
-        alert(helpContent);
-        this.trackEvent('help_viewed');
+        console.log('🌐 Global references exposed');
     }
 
     /**
      * Show loading state
+     * @param {string} message - Loading message
      */
-    showLoadingState() {
-        const loadingEl = document.getElementById('loadingIndicator');
-        if (loadingEl) {
-            loadingEl.classList.remove('hidden');
+    showLoadingState(message = 'Loading...') {
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('hidden');
+        }
+        
+        if (loadingText) {
+            loadingText.textContent = message;
         }
     }
 
@@ -999,275 +298,220 @@ class WorkLogApp {
      * Hide loading state
      */
     hideLoadingState() {
-        const loadingEl = document.getElementById('loadingIndicator');
-        if (loadingEl) {
-            loadingEl.classList.add('hidden');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('hidden');
         }
     }
 
     /**
-     * Show initialization error
-     * @param {Error} error - Error object
+     * Show authentication screen
      */
-    showInitializationError(error) {
-        console.error('Application initialization failed:', error);
+    showAuthenticationScreen() {
+        const authContainer = document.getElementById('authContainer');
+        const appContainer = document.getElementById('appContainer');
         
-        // Show error message in DOM
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'initialization-error';
-        errorDiv.innerHTML = `
-            <div style="padding: 2rem; max-width: 600px; margin: 2rem auto; background: var(--color-surface, #fff); border: 1px solid var(--color-error, #e53e3e); border-radius: 8px; text-align: center;">
-                <h2 style="color: var(--color-error, #e53e3e); margin: 0 0 1rem 0;">⚠️ Application Error</h2>
-                <p style="margin: 0 0 1rem 0;">Failed to initialize the Work Log Tracker. This might be due to:</p>
-                <ul style="text-align: left; margin: 1rem 0; padding-left: 2rem;">
-                    <li>Network connectivity issues</li>
-                    <li>Browser compatibility problems</li>
-                    <li>Local storage limitations</li>
-                    <li>JavaScript execution errors</li>
-                </ul>
-                <p style="margin: 1rem 0;"><strong>Error:</strong> ${error.message}</p>
-                <div style="margin-top: 1.5rem;">
-                    <button onclick="location.reload()" style="padding: 0.5rem 1rem; margin-right: 0.5rem; background: var(--color-primary, #007acc); color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        🔄 Refresh Page
-                    </button>
-                    <button onclick="localStorage.clear(); location.reload()" style="padding: 0.5rem 1rem; background: var(--color-error, #e53e3e); color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        🗑️ Clear Data & Refresh
-                    </button>
-                </div>
-                <p style="font-size: 0.875rem; color: var(--color-text-secondary, #666); margin-top: 1rem;">
-                    If the problem persists, please check your browser's console for detailed error messages.
-                </p>
+        if (authContainer) authContainer.classList.remove('hidden');
+        if (appContainer) appContainer.classList.add('hidden');
+    }
+
+    /**
+     * Show main application
+     */
+    showMainApplication() {
+        const authContainer = document.getElementById('authContainer');
+        const appContainer = document.getElementById('appContainer');
+        
+        if (authContainer) authContainer.classList.add('hidden');
+        if (appContainer) appContainer.classList.remove('hidden');
+    }
+
+    /**
+     * Handle initialization error
+     * @param {Error} error - Initialization error
+     */
+    handleInitializationError(error) {
+        this.hideLoadingState();
+        
+        const errorMessage = `
+            <div style="padding: 20px; text-align: center; color: var(--color-error);">
+                <h2>🚨 Application Failed to Initialize</h2>
+                <p><strong>Error:</strong> ${error.message}</p>
+                <p>Please refresh the page or contact support if the problem persists.</p>
+                <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: var(--color-primary); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    🔄 Reload Application
+                </button>
             </div>
         `;
         
-        document.body.innerHTML = '';
-        document.body.appendChild(errorDiv);
-        
-        this.trackEvent('app_initialization_failed', {
-            message: error.message,
-            stack: error.stack?.substring(0, 500)
-        });
+        document.body.innerHTML = errorMessage;
     }
 
-    // Utility methods
-
     /**
-     * Show toast message
-     * @param {string} message - Message to show
+     * Quick save functionality
      */
-    showToast(message) {
-        if (this.toastController) {
-            this.toastController.show(message);
-        } else {
-            // Fallback if toast controller not initialized
-            console.log('Toast:', message);
+    async quickSave() {
+        try {
+            this.controllers.toast.loading('Saving...');
+            const result = await this.dataService.saveData();
+            
+            if (result.success) {
+                this.controllers.toast.brief('💾 Saved');
+            } else {
+                this.controllers.toast.warning(result.message);
+            }
+        } catch (error) {
+            console.error('Quick save failed:', error);
+            this.controllers.toast.error('Save failed');
         }
     }
 
     /**
-     * Dispatch application event
-     * @param {string} eventName - Event name
-     * @param {*} data - Event data
+     * Quick export functionality
      */
-    dispatchAppEvent(eventName, data) {
-        const event = new CustomEvent(`app:${eventName}`, {
-            detail: data,
-            bubbles: true
-        });
-        document.dispatchEvent(event);
+    async quickExport() {
+        try {
+            const result = await this.exportService.exportCurrentMonth('csv');
+            this.controllers.toast.success(result.message);
+        } catch (error) {
+            console.error('Quick export failed:', error);
+            this.controllers.toast.error('Export failed');
+        }
     }
 
     /**
-     * Track application events (placeholder for analytics)
-     * @param {string} eventName - Event name
-     * @param {Object} properties - Event properties
+     * Refresh all components
      */
-    trackEvent(eventName, properties = {}) {
-        // This could be connected to analytics service
-        console.log('📊 Event:', eventName, properties);
+    refreshAllComponents() {
+        console.log('🔄 Refreshing all components...');
         
-        // Store in local analytics if needed
+        // Refresh controllers
+        Object.values(this.controllers).forEach(controller => {
+            if (controller.refresh) {
+                controller.refresh();
+            }
+        });
+        
+        // Refresh views
+        Object.values(this.views).forEach(view => {
+            if (view.refresh) {
+                view.refresh();
+            }
+        });
+        
+        this.controllers.toast.brief('🔄 Refreshed');
+    }
+
+    /**
+     * Handle export request
+     * @param {Object} exportOptions - Export options
+     */
+    async handleExportRequest(exportOptions) {
         try {
-            const analytics = JSON.parse(localStorage.getItem('app_analytics') || '[]');
-            analytics.push({
-                event: eventName,
-                properties,
-                timestamp: new Date().toISOString(),
-                session: this.getSessionId()
+            const result = await this.exportService.export(
+                exportOptions.format,
+                exportOptions.options
+            );
+            
+            this.controllers.toast.dataEvent('exported', {
+                message: result.message
             });
             
-            // Keep only last 100 events
-            if (analytics.length > 100) {
-                analytics.splice(0, analytics.length - 100);
-            }
-            
-            localStorage.setItem('app_analytics', JSON.stringify(analytics));
         } catch (error) {
-            // Ignore analytics errors
+            console.error('Export request failed:', error);
+            this.controllers.toast.error('Export failed: ' + error.message);
         }
-    }
-
-    /**
-     * Get session ID
-     * @returns {string} - Session ID
-     */
-    getSessionId() {
-        if (!this.sessionId) {
-            this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        }
-        return this.sessionId;
-    }
-
-    /**
-     * Get enabled features list
-     * @returns {Array} - List of enabled features
-     */
-    getEnabledFeatures() {
-        return [
-            'calendar_navigation',
-            'work_entries',
-            'project_management',
-            'data_export',
-            'cloud_sync',
-            'guest_mode',
-            'auto_save',
-            'keyboard_shortcuts',
-            'theme_support',
-            'offline_mode',
-            'dashboard_analytics',    // ✅ NEW
-            'weekend_detection',      // ✅ NEW
-            'historical_data',        // ✅ NEW
-            'backup_restore'          // ✅ NEW
-        ];
-    }
-
-    // Public API methods
-
-    /**
-     * Get application version
-     * @returns {string} - Version string
-     */
-    getVersion() {
-        return this.version;
     }
 
     /**
      * Get application status
      * @returns {Object} - Application status
      */
-    getStatus() {
+    getAppStatus() {
         return {
             initialized: this.isInitialized,
-            version: this.version,
-            buildDate: this.buildDate,
-            user: this.user?.getUserProfile(),
-            dataService: this.dataService?.getSyncStatus(),
-            dashboardController: !!this.dashboardController, // ✅ NEW
-            analyticsService: !!this.analyticsService,        // ✅ NEW
-            exportService: !!this.exportService,              // ✅ NEW
-            errorCount: this.errorCount,
-            features: this.getEnabledFeatures()
+            firebase: this.firebaseConfig ? this.firebaseConfig.isInitialized() : false,
+            user: this.user ? this.user.getUserProfile() : null,
+            syncStatus: this.dataService ? this.dataService.getSyncStatus() : null,
+            controllers: Object.keys(this.controllers),
+            views: Object.keys(this.views)
         };
     }
 
     /**
-     * Get user instance
-     * @returns {User} - User instance
+     * Cleanup application
      */
-    getUser() {
-        return this.user;
-    }
-
-    /**
-     * Get data service instance
-     * @returns {DataService} - DataService instance
-     */
-    getDataService() {
-        return this.dataService;
-    }
-
-    /**
-     * Get calendar view instance
-     * @returns {CalendarView} - CalendarView instance
-     */
-    getCalendarView() {
-        return this.calendarView;
-    }
-
-    /**
-     * ✅ NEW: Get dashboard controller instance
-     * @returns {DashboardController} - DashboardController instance
-     */
-    getDashboardController() {
-        return this.dashboardController;
-    }
-
-    /**
-     * Check if application is ready
-     * @returns {boolean} - Ready state
-     */
-    isReady() {
-        return this.isInitialized && !this.isShuttingDown;
-    }
-
-    /**
-     * Shutdown application
-     */
-    async shutdown() {
-        if (this.isShuttingDown) return;
+    destroy() {
+        console.log('🧹 Cleaning up application...');
         
-        console.log('🛑 Shutting down application...');
-        this.isShuttingDown = true;
-        
-        try {
-            // Save data before shutdown
-            if (this.dataService) {
-                await this.dataService.saveData();
+        // Cleanup controllers
+        Object.values(this.controllers).forEach(controller => {
+            if (controller.destroy) {
+                controller.destroy();
             }
-            
-            // Cleanup resources
-            if (this.calendarView) this.calendarView.destroy();
-            if (this.authController) this.authController.destroy();
-            if (this.entryController) this.entryController.destroy();
-            if (this.projectController) this.projectController.destroy();
-            if (this.toastController) this.toastController.destroy();
-            if (this.dashboardController) this.dashboardController.destroy(); // ✅ NEW
-            
-            // Clear global references
-            delete window.entryController;
-            delete window.projectController;
-            delete window.authController;
-            delete window.dashboardController; // ✅ NEW
-            delete window.app;
-            
-            this.trackEvent('app_shutdown');
-            console.log('✅ Application shutdown complete');
-            
-        } catch (error) {
-            console.error('Error during shutdown:', error);
-        }
+        });
+        
+        // Cleanup views
+        Object.values(this.views).forEach(view => {
+            if (view.destroy) {
+                view.destroy();
+            }
+        });
+        
+        // Clear global references
+        delete window.authController;
+        delete window.dashboardController;
+        delete window.entryController;
+        delete window.projectController;
+        delete window.toastController;
+        delete window.calendarView;
+        delete window.dataService;
+        delete window.exportService;
+        delete window.analyticsService;
+        delete window.dailyWorkLogApp;
+        
+        console.log('✅ Application cleanup complete');
+    }
+
+    /**
+     * Restart application
+     */
+    async restart() {
+        console.log('🔄 Restarting application...');
+        this.destroy();
+        await this.init();
     }
 }
 
-// Initialize the application when DOM is ready
+// Initialize application when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🌟 DOM loaded, starting Work Log Application...');
+    console.log('📄 DOM Content Loaded - Starting Daily Work Log Tracker');
     
-    const app = new WorkLogApp();
-    const success = await app.initialize();
-    
-    if (success) {
-        // Make app instance available globally for debugging
-        window.workLogApp = app;
+    try {
+        // Create and initialize application
+        const app = new DailyWorkLogApp();
+        await app.init();
         
-        // Log successful initialization
-        console.log(`🎉 Work Log Application v${app.getVersion()} is ready!`);
+        // Expose app globally for debugging
+        window.dailyWorkLogApp = app;
         
-        // Show welcome message
-        setTimeout(() => {
-            app.showToast(`🎉 Welcome to Work Log Tracker v${app.getVersion()}!`);
-        }, 1000);
+        console.log('🎉 Daily Work Log Tracker ready!');
+        console.log('📊 App Status:', app.getAppStatus());
+        
+    } catch (error) {
+        console.error('💥 Failed to start Daily Work Log Tracker:', error);
     }
 });
 
-export default WorkLogApp;
+// Handle page visibility changes (for sync optimization)
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && window.dailyWorkLogApp) {
+        // Page became visible, refresh data if needed
+        const syncStatus = window.dailyWorkLogApp.dataService?.getSyncStatus();
+        if (syncStatus && syncStatus.pendingChanges) {
+            window.dailyWorkLogApp.dataService.saveData();
+        }
+    }
+});
+
+export default DailyWorkLogApp;

@@ -231,7 +231,7 @@ class ProjectController {
     /**
      * Render projects list
      */
-    renderProjectsList() {
+    async renderProjectsList() {
         if (!this.elements.projectsList) return;
 
         let projects = this.dataService.getProjects();
@@ -650,7 +650,7 @@ class ProjectController {
     /**
      * Check for duplicate projects
      */
-    checkForDuplicates() {
+    async checkForDuplicates() {
         const projectId = this.elements.newProjectId?.value?.trim() || '';
         const subCode = this.elements.newSubCode?.value?.trim() || '';
         
@@ -813,83 +813,6 @@ class ProjectController {
      */
     findProjectByValue(value) {
         return this.dataService.findProjectByValue(value);
-    }
-
-    /**
-     * Export projects as CSV
-     */
-    exportProjects() {
-        const projects = this.dataService.getProjects();
-        
-        if (projects.length === 0) {
-            this.showToast('❌ No projects to export');
-            return;
-        }
-
-        const headers = [
-            'Project ID', 'Sub Code', 'Project Title', 'Category', 
-            'Status', 'Usage Count', 'Created Date', 'Description'
-        ];
-        
-        const csvData = [
-            headers.join(','),
-            ...projects.map(project => [
-                project.projectId,
-                project.subCode,
-                `"${project.projectTitle.replace(/"/g, '""')}"`,
-                project.category,
-                project.isActive ? 'Active' : 'Inactive',
-                project.usageCount || 0,
-                new Date(project.createdAt).toLocaleDateString(),
-                `"${(project.description || '').replace(/"/g, '""')}"`
-            ].join(','))
-        ].join('\n');
-
-        // Download CSV
-        this.downloadFile(csvData, 'projects-export.csv', 'text/csv');
-        this.showToast('📁 Projects exported successfully');
-    }
-
-    /**
-     * Download file
-     * @param {string} content - File content
-     * @param {string} filename - File name
-     * @param {string} mimeType - MIME type
-     */
-    downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    }
-
-    /**
-     * Get project statistics
-     * @returns {Object} - Project statistics
-     */
-    getProjectStats() {
-        const projects = this.dataService.getProjects();
-        const activeProjects = projects.filter(p => p.isActive);
-        const categoryCounts = {};
-        
-        projects.forEach(project => {
-            categoryCounts[project.category] = (categoryCounts[project.category] || 0) + 1;
-        });
-
-        return {
-            total: projects.length,
-            active: activeProjects.length,
-            inactive: projects.length - activeProjects.length,
-            categories: Object.keys(categoryCounts).length,
-            categoryCounts: categoryCounts,
-            mostUsed: projects.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))[0],
-            totalUsage: projects.reduce((sum, p) => sum + (p.usageCount || 0), 0)
-        };
     }
 
     /**
